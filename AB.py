@@ -1,8 +1,7 @@
 import os
 import time
 import shutil
-
-####################
+import msvcrt
 
 WIDTH = 60
 HEIGHT = 16
@@ -16,6 +15,8 @@ class Entity:
 class Player(Entity):
     def __init__(self, x):
         super().__init__(x, '@')
+        self.hp = 10
+        self.max_hp = 10
 
     def update(self):
         pass
@@ -24,6 +25,7 @@ class Room:
     def __init__(self, width, height):
         self.width = width
         self.height = height
+        self.description = "A plain room."
         # In the future: add obstacles, decorations, etc.
 
     def get_landscape_line(self, y):
@@ -33,11 +35,15 @@ class Room:
 class UI:
     def __init__(self):
         self.title = "ASCII Roguelike Demo"
-        self.hp = 10
-        self.max_hp = 10
+        # UI layout info could go here
 
-    def draw(self, pad_left, width):
-        print(' ' * pad_left + f"[HP: {self.hp}/{self.max_hp}] [Press Ctrl+C to quit]".ljust(width + 2))
+    def draw(self, pad_left, width, player, room):
+        # Draw title
+        print(' ' * pad_left + self.title.center(width + 2))
+        # Draw player stats from player entity
+        print(' ' * pad_left + f"[HP: {player.hp}/{player.max_hp}]".ljust(width + 2))
+        # Draw room description from room
+        print(' ' * pad_left + room.description.center(width + 2))
         print('\n' * 2)
 
 class Renderer:
@@ -55,7 +61,7 @@ class Renderer:
 
         # UI area above
         print('\n' * 6)
-        print(' ' * pad_left + ui.title.center(self.width + 2))
+        ui.draw(pad_left, self.width, player, room)
         print(' ' * pad_left + "+" + "-" * self.width + "+")  # Top frame
 
         # Game area
@@ -77,8 +83,18 @@ class Renderer:
         # Screen bottom line (frame)
         print(' ' * pad_left + "+" + "-" * self.width + "+")  # Bottom frame
 
-        # UI area below
-        ui.draw(pad_left, self.width)
+        # UI area below (could add more info here if needed)
+        print('\n' * 2)
+
+class InputHandler:
+    def __init__(self):
+        self.quit = False
+
+    def poll(self):
+        if msvcrt.kbhit():
+            key = msvcrt.getch()
+            if key == b'\x1b':  # ESC key
+                self.quit = True
 
 class Game:
     def __init__(self):
@@ -86,15 +102,20 @@ class Game:
         self.room = Room(WIDTH, HEIGHT)
         self.ui = UI()
         self.renderer = Renderer(WIDTH, HEIGHT, GROUND_Y)
+        self.input_handler = InputHandler()
         self.running = True
 
     def update(self):
         self.player.update()
+        self.input_handler.poll()
+        if self.input_handler.quit:
+            self.running = False
 
     def run(self):
         while self.running:
             self.renderer.clear()
             self.renderer.render(self.player, self.room, self.ui)
+            self.update()
             time.sleep(0.1)
 
 if __name__ == "__main__":
