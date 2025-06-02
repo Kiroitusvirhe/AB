@@ -91,16 +91,10 @@ class Room:
 class UI:
     def __init__(self):
         self.title = "ASCII Roguelike Demo"
-        # UI layout info could go here
 
-    def draw(self, pad_left, width, player, room):
-        # Draw title
+    def draw(self, pad_left, width):
+        # Only draw the title, centered above the game screen
         print(' ' * pad_left + self.title.center(width + 2))
-        # Draw player stats from player entity
-        print(' ' * pad_left + f"[HP: {player.hp}/{player.max_hp}]".ljust(width + 2))
-        # Draw room description from room
-        print(' ' * pad_left + room.description.center(width + 2))
-        print('\n' * 2)
 
 class Renderer:
     def __init__(self, width, height, ground_y):
@@ -115,9 +109,8 @@ class Renderer:
         term_size = shutil.get_terminal_size((80, 24))
         pad_left = (term_size.columns - (self.width + 2)) // 2  # +2 for frame
 
-        # UI area above
-        print('\n' * 6)
-        ui.draw(pad_left, self.width, player, room)
+        # UI area above: only the title
+        ui.draw(pad_left, self.width)
         print(' ' * pad_left + "+" + "-" * self.width + "+")  # Top frame
 
         # Game area
@@ -139,8 +132,8 @@ class Renderer:
         # Screen bottom line (frame)
         print(' ' * pad_left + "+" + "-" * self.width + "+")  # Bottom frame
 
-        # UI area below (could add more info here if needed)
-        print('\n' * 2)
+        # UI area below (now empty)
+        # (You can add controls/help here if you want)
 
 class InputHandler:
     def __init__(self):
