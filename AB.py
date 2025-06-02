@@ -11,15 +11,71 @@ class Entity:
     def __init__(self, x, char):
         self.x = x
         self.char = char
+        # Offensive stats
+        self.attack = 1
+        self.attack_speed = 1.0
+        self.crit_chance = 0.1
+        self.crit_damage = 2.0
+        # Defensive stats
+        self.hp = 10
+        self.max_hp = 10
+        self.defence = 0
+        self.health_regen = 0
+        self.thorn_damage = 0
+        self.lifesteal = 0.0
 
 class Player(Entity):
     def __init__(self, x):
         super().__init__(x, '@')
-        self.hp = 10
-        self.max_hp = 10
+        # You can override or set specific stats for the player here if needed
 
     def update(self):
         pass
+
+class Enemy(Entity):
+    def __init__(self, x, enemy_type='basic'):
+        if enemy_type == 'basic':
+            char = 'E'
+            super().__init__(x, char)
+            self.hp = 8
+            self.max_hp = 8
+            self.attack = 2
+            self.attack_speed = 1.0
+            self.crit_chance = 0.1
+            self.crit_damage = 2.0
+            self.defence = 0
+            self.health_regen = 0
+            self.thorn_damage = 0
+            self.lifesteal = 0.0
+        elif enemy_type == 'speedy':
+            char = 'S'
+            super().__init__(x, char)
+            self.hp = 5
+            self.max_hp = 5
+            self.attack = 1
+            self.attack_speed = 2.0
+            self.crit_chance = 0.2
+            self.crit_damage = 1.5
+            self.defence = 0
+            self.health_regen = 0
+            self.thorn_damage = 0
+            self.lifesteal = 0.0
+        elif enemy_type == 'tough':
+            char = 'O'
+            super().__init__(x, char)
+            self.hp = 15
+            self.max_hp = 15
+            self.attack = 1
+            self.attack_speed = 0.7
+            self.crit_chance = 0.05
+            self.crit_damage = 2.5
+            self.defence = 2
+            self.health_regen = 1
+            self.thorn_damage = 1
+            self.lifesteal = 0.0
+        else:
+            char = '?'
+            super().__init__(x, char)
 
 class Room:
     def __init__(self, width, height):
