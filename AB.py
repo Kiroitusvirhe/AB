@@ -96,8 +96,9 @@ class UI:
     def __init__(self):
         self.title = "ASCII Roguelike Demo"
 
-    def draw(self, pad_left, width):
-        print(' ' * pad_left + self.title.center(width + 2))
+    def get_title_line(self, pad_left, width):
+        # Return the title line as a string, centered
+        return ' ' * pad_left + self.title.center(width + 2)
 
     def get_player_stats_lines(self, player, game_height):
         stats = [
@@ -139,7 +140,7 @@ class Renderer:
             boss_info_lines += [''] * (self.height - len(boss_info_lines))
 
         # Title and top frame
-        print(' ' * (pad_left + stats_col_width) + ui.title.center(self.width + 2))
+        print(ui.get_title_line(pad_left + stats_col_width, self.width))
         print(' ' * pad_left + '+' + '-' * stats_col_width + '+' + '-' * self.width + '+' + '-' * boss_col_width + '+')
 
         # Game area (player at the bottom row)
