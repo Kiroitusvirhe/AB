@@ -2,6 +2,8 @@ import os
 import time
 import shutil
 
+####################
+
 WIDTH = 60
 HEIGHT = 16
 GROUND_Y = HEIGHT - 3  # Ground is always at this row
