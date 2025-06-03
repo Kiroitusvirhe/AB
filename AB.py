@@ -71,6 +71,25 @@ class Player(Entity):
     def reset_regen_timer(self):
         self.regen_timer = 0.0
 
+# --- Player Job Classes ---
+class Fighter(Player):
+    def __init__(self, x):
+        super().__init__(x)
+        self.upgrade_stat("attack")
+
+class Assassin(Player):
+    def __init__(self, x):
+        super().__init__(x)
+        self.upgrade_stat("crit_chance")
+        self.upgrade_stat("attack_speed")
+        self.upgrade_stat("dodge_chance")
+
+class Paladin(Player):
+    def __init__(self, x):
+        super().__init__(x)
+        self.upgrade_stat("defence")
+        self.upgrade_stat("max_hp")  # +5 HP
+
 class Enemy(Entity):
     """Enemy character with different types."""
     def __init__(self, x, enemy_type='basic'):
@@ -350,6 +369,34 @@ class Announcements:
                     break
             time.sleep(0.08)
         player.upgrade_stat(choices[selected][0])
+
+    def job_select_screen(self):
+        jobs = [
+            "Fighter",
+            "Assassin",
+            "Paladin"
+        ]
+        selected = 0
+        while True:
+            lines = ["CHOOSE YOUR CLASS:"]
+            for i, name in enumerate(jobs):
+                prefix = "-> " if i == selected else "   "
+                lines.append(f"{prefix}{i+1}. {name}")
+            message = "\n".join(lines)
+            self.renderer.render(self.player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'1', b'2', b'3']:
+                    selected = int(key) - 1
+                    break
+                elif key in [b'H', b'K', b'w']:
+                    selected = (selected - 1) % 3
+                elif key in [b'P', b'M', b's']:
+                    selected = (selected + 1) % 3
+                elif key == b'\r' or key == b' ':
+                    break
+            time.sleep(0.08)
+        return selected
 
 # --- Animations Class ---
 class Animations:
@@ -643,8 +690,8 @@ class Game:
     # --- Reset Methods ---
     def reset_player_stats(self):
         """Reset player stats and position for a new game."""
-        # Re-initialize the player object in-place to preserve references
-        self.player.__init__(x=PLAYER_START_X)  # Use new constant
+        # This will be handled by job selection now
+        pass
 
     def reset_player_position(self):
         """Only resets position, not stats."""
@@ -664,19 +711,26 @@ class Game:
 
     def run(self):
         while self.running:
-            self.reset_player_stats()
+            # --- Job selection ---
+            self.announcements.intro()
+            if self.input_handler.quit:
+                return
+            job_idx = self.announcements.job_select_screen()
+            if job_idx == 0:
+                self.player = Fighter(x=PLAYER_START_X)
+            elif job_idx == 1:
+                self.player = Assassin(x=PLAYER_START_X)
+            else:
+                self.player = Paladin(x=PLAYER_START_X)
             self.reset_player_position()
             self.current_room = 1  # Reset room counter on new game
 
-            # Update room number in other classes
+            # Update room number and player reference in other classes
+            self.announcements.player = self.player
             self.announcements.current_room = self.current_room
+            self.animations.player = self.player
             self.animations.current_room = self.current_room
             self.battle_system.current_room = self.current_room
-
-            self.announcements.intro()
-
-            if self.input_handler.quit:
-                return
 
             self.animations.player_slide_and_disappear()
 
