@@ -291,6 +291,78 @@ class Animations:
         self.renderer.render(self.player, self.room, self.ui)
         time.sleep(0.2)
 
+    def crit_effect(self, attacker, boss_info_lines=None, battle_log_lines=None):
+        """Show 'CRIT!' above the attacker for a critical hit."""
+        y = self.room.height - 2  # One row above attacker
+        old_get_landscape_line = self.room.get_landscape_line
+
+        def make_crit_line():
+            line = [' '] * self.room.width
+            word = 'CRIT!'
+            start = max(0, min(self.room.width - len(word), attacker.x - len(word)//2))
+            for i, ch in enumerate(word):
+                line[start + i] = ch
+            return line
+
+        try:
+            def patched_get_landscape_line(row):
+                if row == y:
+                    return make_crit_line()
+                else:
+                    return old_get_landscape_line(row)
+            self.room.get_landscape_line = patched_get_landscape_line
+            self.renderer.clear()
+            self.renderer.render(
+                self.player, self.room, self.ui,
+                boss_info_lines=boss_info_lines,
+                battle_log_lines=battle_log_lines
+            )
+            time.sleep(0.8)
+        finally:
+            self.room.get_landscape_line = old_get_landscape_line
+        self.renderer.clear()
+        self.renderer.render(
+            self.player, self.room, self.ui,
+            boss_info_lines=boss_info_lines,
+            battle_log_lines=battle_log_lines
+        )
+
+    def dodge_effect(self, attacker, target, boss_info_lines=None, battle_log_lines=None):
+        """Show 'DODGED!' above the target when attack is dodged."""
+        y = self.room.height - 2  # One row above target
+        old_get_landscape_line = self.room.get_landscape_line
+
+        def make_dodge_line():
+            line = [' '] * self.room.width
+            word = 'DODGED!'
+            start = max(0, min(self.room.width - len(word), target.x - len(word)//2))
+            for i, ch in enumerate(word):
+                line[start + i] = ch
+            return line
+
+        try:
+            def patched_get_landscape_line(row):
+                if row == y:
+                    return make_dodge_line()
+                else:
+                    return old_get_landscape_line(row)
+            self.room.get_landscape_line = patched_get_landscape_line
+            self.renderer.clear()
+            self.renderer.render(
+                self.player, self.room, self.ui,
+                boss_info_lines=boss_info_lines,
+                battle_log_lines=battle_log_lines
+            )
+            time.sleep(0.8)
+        finally:
+            self.room.get_landscape_line = old_get_landscape_line
+        self.renderer.clear()
+        self.renderer.render(
+            self.player, self.room, self.ui,
+            boss_info_lines=boss_info_lines,
+            battle_log_lines=battle_log_lines
+        )
+
     def slash(self, attacker, target=None, boss_info_lines=None, battle_log_lines=None):
         """Show a directional slash effect next to the attacker, facing the target, using the main renderer."""
         y = self.room.height - 1
@@ -347,16 +419,32 @@ class Battle:
         self.room = room
 
     def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None):
-        # Play slash animation if available
+        # Play slash/crit/dodge animation if available
         if hasattr(self, 'animations') and self.animations:
-            self.animations.slash(attacker, defender, boss_info_lines, battle_log_lines)
-        if random.random() < defender.dodge_chance:
-            return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
-        damage = max(1, attacker.attack - defender.defence)
-        crit = False
-        if random.random() < attacker.crit_chance:
-            damage = int(damage * attacker.crit_damage)
-            crit = True
+            # Dodge check first
+            if random.random() < defender.dodge_chance:
+                self.animations.dodge_effect(attacker, defender, boss_info_lines, battle_log_lines)
+                return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
+            # Crit check
+            crit = False
+            if random.random() < attacker.crit_chance:
+                damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
+                crit = True
+                self.animations.crit_effect(attacker, boss_info_lines, battle_log_lines)
+            else:
+                damage = max(1, attacker.attack - defender.defence)
+                self.animations.slash(attacker, defender, boss_info_lines, battle_log_lines)
+        else:
+            # No animations
+            if random.random() < defender.dodge_chance:
+                return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
+            crit = False
+            if random.random() < attacker.crit_chance:
+                damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
+                crit = True
+            else:
+                damage = max(1, attacker.attack - defender.defence)
+
         if attacker.lifesteal > 0:
             heal = int(damage * attacker.lifesteal)
             attacker.hp = min(attacker.max_hp, attacker.hp + heal)
@@ -366,7 +454,7 @@ class Battle:
             attacker.hp -= defender.thorn_damage
             thorn_msg = f" {attacker.char} takes {defender.thorn_damage} thorn damage!"
         msg = f"{attacker.char} hits {defender.char} for {damage} damage"
-        if crit:
+        if 'crit' in locals() and crit:
             msg += " (CRIT!)"
         msg += "!" + thorn_msg
         return msg
