@@ -147,6 +147,9 @@ class UI:
             stats += [''] * (game_height - len(stats))
         return stats
 
+    def get_room_counter_line(self, room_number):
+        return f"ROOM: {room_number}"
+
 class Renderer:
     """Handles all drawing to the terminal."""
     def __init__(self, width, height):
@@ -157,7 +160,7 @@ class Renderer:
     def clear(self):
         print('\033[H', end='')
 
-    def render(self, player, room, ui, boss_info_lines=None, battle_log_lines=None, intro_message=None):
+    def render(self, player, room, ui, boss_info_lines=None, battle_log_lines=None, intro_message=None, room_number=None):
         self.clear()  # <-- Always clear at the start of render
         stats_col_width = 16
         boss_col_width = 16
@@ -198,6 +201,17 @@ class Renderer:
         battle_log_height = 6
         if battle_log_lines is None:
             battle_log_lines = []
+
+        # Add room counter to the first line of battle log
+        room_num = room_number
+        if room_num is None:
+            room_num = getattr(room, 'current_room', 1)
+        room_line = ui.get_room_counter_line(room_num)
+        if len(battle_log_lines) == 0:
+            battle_log_lines = [room_line]
+        elif len(battle_log_lines) < battle_log_height:
+            battle_log_lines = [room_line] + battle_log_lines
+
         for i in range(battle_log_height):
             log = battle_log_lines[i] if i < len(battle_log_lines) else ''
             print(' ' * pad_left + '|' + ' ' * stats_col_width + '|' + log.ljust(self.width) + '|' + ' ' * boss_col_width + '|')
@@ -228,11 +242,11 @@ class Announcements:
         self.room = room
         self.player = player
         self.input_handler = input_handler
+        self.current_room = 1  # Will be set by Game
 
-    def wait_for_space(self, message, enemy=None, show_player=True):
+    def wait_for_space(self, message, enemy=None, show_player=True, room_number=None):
         self.input_handler.space_pressed = False
         self.renderer.enemy = enemy
-        # Always restore player position for announcements unless explicitly hiding
         visible_x = 5  # Default visible position
         original_player_x = self.player.x if self.player.x >= 0 else visible_x
         while not self.input_handler.space_pressed:
@@ -245,27 +259,27 @@ class Announcements:
             self.renderer.render(
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
-                intro_message=message
+                intro_message=message,
+                room_number=room_number if room_number is not None else getattr(self, 'current_room', 1)
             )
             self.input_handler.poll()
             time.sleep(0.05)
-        # Restore player position after announcement if showing player
         if show_player:
             self.player.x = original_player_x
         if enemy is None:
             self.renderer.enemy = None
 
     def intro(self):
-        self.wait_for_space("Press spacebar to start", show_player=True)
+        self.wait_for_space("Press spacebar to start", show_player=True, room_number=self.current_room)
 
     def battle_start(self, enemy):
-        self.wait_for_space("Press spacebar to start the battle", enemy=enemy, show_player=True)
+        self.wait_for_space("Press spacebar to start the battle", enemy=enemy, show_player=True, room_number=self.current_room)
 
     def win(self):
-        self.wait_for_space("You win!\nPress spacebar to enter the next room", enemy=None, show_player=True)
+        self.wait_for_space("You win!\nPress spacebar to enter the next room", enemy=None, show_player=True, room_number=self.current_room)
 
     def lose(self, enemy):
-        self.wait_for_space("You lose!\nPress spacebar to restart", enemy=enemy, show_player=False)
+        self.wait_for_space("You lose!\nPress spacebar to restart", enemy=enemy, show_player=False, room_number=self.current_room)
 
 # --- Animations Class ---
 class Animations:
@@ -275,32 +289,31 @@ class Animations:
         self.room = room
         self.ui = ui
         self.player = player
+        self.current_room = 1  # Will be set by Game
 
     def player_slide_and_disappear(self):
         for x in range(self.player.x, WIDTH):
             self.player.x = x
-            self.renderer.render(self.player, self.room, self.ui)
+            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
             time.sleep(0.02)
         self.player.x = -1
-        self.renderer.render(self.player, self.room, self.ui)
+        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
         time.sleep(0.3)
 
     def death(self, entity):
-        """Animate an entity fading out."""
         fade_chars = ['*', '.', ' ']
         old_char = entity.char
         for char in fade_chars:
             entity.char = char
-            self.renderer.render(self.player, self.room, self.ui)
+            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
             time.sleep(0.12)
         entity.char = old_char
-        entity.x = -1  # Hide after fade
-        self.renderer.render(self.player, self.room, self.ui)
+        entity.x = -1
+        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
         time.sleep(0.2)
 
     def crit_effect(self, attacker, boss_info_lines=None, battle_log_lines=None):
-        """Show 'CRIT!' above the attacker for a critical hit."""
-        y = self.room.height - 2  # One row above attacker
+        y = self.room.height - 2
         old_get_landscape_line = self.room.get_landscape_line
 
         def make_crit_line():
@@ -321,7 +334,8 @@ class Animations:
             self.renderer.render(
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
-                battle_log_lines=battle_log_lines
+                battle_log_lines=battle_log_lines,
+                room_number=self.current_room
             )
             time.sleep(0.8)
         finally:
@@ -329,12 +343,12 @@ class Animations:
         self.renderer.render(
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
-            battle_log_lines=battle_log_lines
+            battle_log_lines=battle_log_lines,
+            room_number=self.current_room
         )
 
     def dodge_effect(self, target, boss_info_lines=None, battle_log_lines=None):
-        """Show 'DODGED!' above the target when attack is dodged."""
-        y = self.room.height - 2  # One row above target
+        y = self.room.height - 2
         old_get_landscape_line = self.room.get_landscape_line
 
         def make_dodge_line():
@@ -355,7 +369,8 @@ class Animations:
             self.renderer.render(
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
-                battle_log_lines=battle_log_lines
+                battle_log_lines=battle_log_lines,
+                room_number=self.current_room
             )
             time.sleep(0.8)
         finally:
@@ -363,11 +378,11 @@ class Animations:
         self.renderer.render(
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
-            battle_log_lines=battle_log_lines
+            battle_log_lines=battle_log_lines,
+            room_number=self.current_room
         )
 
     def slash(self, attacker, target=None, boss_info_lines=None, battle_log_lines=None):
-        """Show a directional slash effect next to the attacker, facing the target, using the main renderer."""
         y = self.room.height - 1
 
         if target is not None and attacker.x < target.x:
@@ -400,7 +415,8 @@ class Animations:
                 self.renderer.render(
                     self.player, self.room, self.ui,
                     boss_info_lines=boss_info_lines,
-                    battle_log_lines=battle_log_lines
+                    battle_log_lines=battle_log_lines,
+                    room_number=self.current_room
                 )
                 time.sleep(0.08)
         finally:
@@ -408,7 +424,8 @@ class Animations:
         self.renderer.render(
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
-            battle_log_lines=battle_log_lines
+            battle_log_lines=battle_log_lines,
+            room_number=self.current_room
         )
 
 # --- Battle System Class ---
@@ -418,6 +435,7 @@ class Battle:
         self.renderer = renderer
         self.ui = ui
         self.room = room
+        self.current_room = 1  # Will be set by Game
 
     def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None):
         # Play slash/crit/dodge animation if available
@@ -461,7 +479,6 @@ class Battle:
         return msg
 
     def battle(self, player, enemy, running_flag):
-        # Find the Animations instance if available
         animations = getattr(self, 'animations', None)
         battle_log = []
         player_next_attack = 0.0
@@ -496,13 +513,14 @@ class Battle:
                 self.renderer.render(
                     player, self.room, self.ui,
                     boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
-                    battle_log_lines=battle_log[-6:]
+                    battle_log_lines=battle_log[-6:],
+                    room_number=self.current_room
                 )
             if enemy.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
                     self.animations.death(enemy)
                 self.renderer.enemy = None
-                player.gain_xp(6)  # Award 5 XP per enemy for now
+                player.gain_xp(6)
                 return "win"
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
@@ -515,7 +533,7 @@ class Battle:
 class Game:
     """Main game class. Manages game state and runs the main loop."""
     def __init__(self):
-        self.player = Player(x=PLAYER_START_X)  # Use constant
+        self.player = Player(x=PLAYER_START_X)
         self.room = Room(WIDTH, HEIGHT)
         self.ui = UI()
         self.renderer = Renderer(WIDTH, HEIGHT)
@@ -526,6 +544,12 @@ class Game:
         self.battle_system.animations = self.animations
         self.enemy = None
         self.running = True
+        self.current_room = 1  # Add this line to track room number
+
+        # Link room number to other classes
+        self.announcements.current_room = self.current_room
+        self.animations.current_room = self.current_room
+        self.battle_system.current_room = self.current_room
 
     # --- Reset Methods ---
     def reset_player_stats(self):
@@ -551,9 +575,15 @@ class Game:
 
     def run(self):
         while self.running:
-            # Reset player stats and position at the start of a new game
             self.reset_player_stats()
             self.reset_player_position()
+            self.current_room = 1  # Reset room counter on new game
+
+            # Update room number in other classes
+            self.announcements.current_room = self.current_room
+            self.animations.current_room = self.current_room
+            self.battle_system.current_room = self.current_room
+
             self.announcements.intro()
 
             if self.input_handler.quit:
@@ -562,8 +592,11 @@ class Game:
             self.animations.player_slide_and_disappear()
 
             while self.running:
-                self.reset_player_position()  # Reset position only
+                self.reset_player_position()
                 self.spawn_enemy()
+                self.announcements.current_room = self.current_room
+                self.animations.current_room = self.current_room
+                self.battle_system.current_room = self.current_room
                 self.announcements.battle_start(self.enemy)
 
                 if self.input_handler.quit:
@@ -572,11 +605,15 @@ class Game:
                 result = self.battle_system.battle(self.player, self.enemy, lambda: self.running)
 
                 if result == "win":
+                    self.current_room += 1  # Increment room counter
+                    self.announcements.current_room = self.current_room
+                    self.animations.current_room = self.current_room
+                    self.battle_system.current_room = self.current_room
                     self.announcements.win()
                     self.animations.player_slide_and_disappear()
                 else:
                     self.announcements.lose(self.enemy)
-                    break  # Exit battle loop (game over)
+                    break
 
                 if self.input_handler.quit:
                     return
