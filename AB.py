@@ -18,21 +18,28 @@ class Entity:
         self.attack_speed = 1.0
         self.crit_chance = 0.05
         self.crit_damage = 2.0
-        self.hp = 10
-        self.max_hp = 10
+        self.hp = 30
+        self.max_hp = 30
         self.defence = 0
         self.health_regen = 0
         self.thorn_damage = 0
         self.lifesteal = 0.0
-        self.dodge_chance = 0.0
+        self.dodge_chance = 0.05
 
 class Player(Entity):
     """Player character."""
     def __init__(self, x):
         super().__init__(x, '@')
+        self.xp = 0
+        self.level = 1
+        self.xp_to_next = 10  # Start with 10 XP for level 2
 
-    def update(self):
-        pass
+    def gain_xp(self, amount):
+        self.xp += amount
+        while self.xp >= self.xp_to_next:
+            self.xp -= self.xp_to_next
+            self.level += 1
+            self.xp_to_next = int(self.xp_to_next * 1.5)  # XP needed increases each level
 
 class Enemy(Entity):
     """Enemy character with different types."""
@@ -104,6 +111,8 @@ class UI:
 
     def get_player_stats_lines(self, player, game_height):
         stats = [
+            f"LVL: {player.level}",
+            f"XP: {player.xp}/{player.xp_to_next}",
             f"HP: {player.hp}/{player.max_hp}",
             f"ATK: {player.attack}",
             f"ATK SPD: {player.attack_speed}",
@@ -493,6 +502,7 @@ class Battle:
                 if hasattr(self, 'animations') and self.animations:
                     self.animations.death(enemy)
                 self.renderer.enemy = None
+                player.gain_xp(5)  # Award 5 XP per enemy for now
                 return "win"
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
