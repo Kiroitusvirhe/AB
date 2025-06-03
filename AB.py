@@ -606,7 +606,6 @@ class Battle:
         leveled_up_this_battle = False
         prev_level = player.level
         regen_base_interval = 6.0  # seconds for 1 regen
-        player.regen_timer = 0.0  # Reset at start
         while player.hp > 0 and enemy.hp > 0 and running_flag():
             acted = False
             if clock >= player_next_attack:
