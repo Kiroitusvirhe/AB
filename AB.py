@@ -6,6 +6,7 @@ import random
 # --- Game Constants ---
 WIDTH = 60
 HEIGHT = 16
+PLAYER_START_X = 5  # <-- Added constant
 
 # --- Entity Classes ---
 class Entity:
@@ -148,6 +149,7 @@ class Renderer:
         print('\033[H', end='')
 
     def render(self, player, room, ui, boss_info_lines=None, battle_log_lines=None, intro_message=None):
+        self.clear()  # <-- Always clear at the start of render
         stats_col_width = 16
         boss_col_width = 16
         term_size = shutil.get_terminal_size((80, 24))
@@ -268,11 +270,9 @@ class Animations:
     def player_slide_and_disappear(self):
         for x in range(self.player.x, WIDTH):
             self.player.x = x
-            self.renderer.clear()
             self.renderer.render(self.player, self.room, self.ui)
             time.sleep(0.02)
         self.player.x = -1
-        self.renderer.clear()
         self.renderer.render(self.player, self.room, self.ui)
         time.sleep(0.3)
 
@@ -282,12 +282,10 @@ class Animations:
         old_char = entity.char
         for char in fade_chars:
             entity.char = char
-            self.renderer.clear()
             self.renderer.render(self.player, self.room, self.ui)
             time.sleep(0.12)
         entity.char = old_char
         entity.x = -1  # Hide after fade
-        self.renderer.clear()
         self.renderer.render(self.player, self.room, self.ui)
         time.sleep(0.2)
 
@@ -311,7 +309,6 @@ class Animations:
                 else:
                     return old_get_landscape_line(row)
             self.room.get_landscape_line = patched_get_landscape_line
-            self.renderer.clear()
             self.renderer.render(
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
@@ -320,14 +317,13 @@ class Animations:
             time.sleep(0.8)
         finally:
             self.room.get_landscape_line = old_get_landscape_line
-        self.renderer.clear()
         self.renderer.render(
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
             battle_log_lines=battle_log_lines
         )
 
-    def dodge_effect(self, attacker, target, boss_info_lines=None, battle_log_lines=None):
+    def dodge_effect(self, target, boss_info_lines=None, battle_log_lines=None):
         """Show 'DODGED!' above the target when attack is dodged."""
         y = self.room.height - 2  # One row above target
         old_get_landscape_line = self.room.get_landscape_line
@@ -347,7 +343,6 @@ class Animations:
                 else:
                     return old_get_landscape_line(row)
             self.room.get_landscape_line = patched_get_landscape_line
-            self.renderer.clear()
             self.renderer.render(
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
@@ -356,7 +351,6 @@ class Animations:
             time.sleep(0.8)
         finally:
             self.room.get_landscape_line = old_get_landscape_line
-        self.renderer.clear()
         self.renderer.render(
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
@@ -394,7 +388,6 @@ class Animations:
                     else:
                         return old_get_landscape_line(row)
                 self.room.get_landscape_line = patched_get_landscape_line
-                self.renderer.clear()
                 self.renderer.render(
                     self.player, self.room, self.ui,
                     boss_info_lines=boss_info_lines,
@@ -403,7 +396,6 @@ class Animations:
                 time.sleep(0.08)
         finally:
             self.room.get_landscape_line = old_get_landscape_line
-        self.renderer.clear()
         self.renderer.render(
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
@@ -423,7 +415,7 @@ class Battle:
         if hasattr(self, 'animations') and self.animations:
             # Dodge check first
             if random.random() < defender.dodge_chance:
-                self.animations.dodge_effect(attacker, defender, boss_info_lines, battle_log_lines)
+                self.animations.dodge_effect(defender, boss_info_lines, battle_log_lines)
                 return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
             # Crit check
             crit = False
@@ -492,7 +484,6 @@ class Battle:
             if enemy.health_regen > 0 and int(clock * 10) % 10 == 0:
                 enemy.hp = min(enemy.max_hp, enemy.hp + enemy.health_regen)
             if acted or int(clock * 10) % 2 == 0:
-                self.renderer.clear()
                 self.renderer.render(
                     player, self.room, self.ui,
                     boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
@@ -514,7 +505,7 @@ class Battle:
 class Game:
     """Main game class. Manages game state and runs the main loop."""
     def __init__(self):
-        self.player = Player(x=5)  # Initialize once, stats persist
+        self.player = Player(x=PLAYER_START_X)  # Use constant
         self.room = Room(WIDTH, HEIGHT)
         self.ui = UI()
         self.renderer = Renderer(WIDTH, HEIGHT)
@@ -530,11 +521,11 @@ class Game:
     def reset_player_stats(self):
         """Reset player stats and position for a new game."""
         # Re-initialize the player object in-place to preserve references
-        self.player.__init__(x=5)
+        self.player.__init__(x=PLAYER_START_X)  # Use constant
 
     def reset_player_position(self):
         """Only resets position, not stats."""
-        self.player.x = 5
+        self.player.x = PLAYER_START_X  # Use constant
 
     # --- Game Logic ---
     def spawn_enemy(self):
