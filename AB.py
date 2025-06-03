@@ -276,6 +276,21 @@ class Animations:
         self.renderer.render(self.player, self.room, self.ui)
         time.sleep(0.3)
 
+    def death(self, entity):
+        """Animate an entity fading out."""
+        fade_chars = ['*', '.', ' ']
+        old_char = entity.char
+        for char in fade_chars:
+            entity.char = char
+            self.renderer.clear()
+            self.renderer.render(self.player, self.room, self.ui)
+            time.sleep(0.12)
+        entity.char = old_char
+        entity.x = -1  # Hide after fade
+        self.renderer.clear()
+        self.renderer.render(self.player, self.room, self.ui)
+        time.sleep(0.2)
+
 # --- Battle System Class ---
 class Battle:
     """Handles the battle logic between two entities, using all stats."""
@@ -285,7 +300,6 @@ class Battle:
         self.room = room
 
     def attack(self, attacker, defender):
-        import random
         if random.random() < defender.dodge_chance:
             return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
         damage = max(1, attacker.attack - defender.defence)
@@ -308,6 +322,8 @@ class Battle:
         return msg
 
     def battle(self, player, enemy, running_flag):
+        # Find the Animations instance if available
+        animations = getattr(self, 'animations', None)
         battle_log = []
         player_next_attack = 0.0
         enemy_next_attack = 0.0
@@ -337,16 +353,13 @@ class Battle:
                     battle_log_lines=battle_log[-6:]
                 )
             if enemy.hp <= 0:
+                if hasattr(self, 'animations') and self.animations:
+                    self.animations.death(enemy)
                 self.renderer.enemy = None
                 return "win"
             if player.hp <= 0:
-                player.x = -1
-                self.renderer.clear()
-                self.renderer.render(
-                    player, self.room, self.ui,
-                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
-                    battle_log_lines=battle_log[-6:]
-                )
+                if hasattr(self, 'animations') and self.animations:
+                    self.animations.death(player)
                 return "lose"
             time.sleep(time_step)
             clock += time_step
@@ -363,6 +376,7 @@ class Game:
         self.announcements = Announcements(self.renderer, self.ui, self.room, self.player, self.input_handler)
         self.animations = Animations(self.renderer, self.room, self.ui, self.player)
         self.battle_system = Battle(self.renderer, self.ui, self.room)
+        self.battle_system.animations = self.animations
         self.enemy = None
         self.running = True
 
