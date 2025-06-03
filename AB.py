@@ -14,7 +14,7 @@ class Entity:
     def __init__(self, x, char):
         self.x = x
         self.char = char
-        self.attack = 2
+        self.attack = 1
         self.attack_speed = 1.0
         self.crit_chance = 0.05
         self.crit_damage = 2.0
