@@ -655,8 +655,6 @@ class Battle:
         enemy_next_attack = 0.0
         clock = 0.0
         time_step = 0.05
-        leveled_up_this_battle = False
-        prev_level = player.level
         regen_base_interval = 6.0  # seconds for 1 regen
 
         # For future: support multiple enemies
