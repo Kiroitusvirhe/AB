@@ -5,7 +5,7 @@ import random
 
 # --- Game Constants ---
 WIDTH = 60
-HEIGHT = 16
+HEIGHT = 17  # Increased by 1 for even bottom boxes
 PLAYER_START_X = WIDTH * 1 // 4  # Player starts at 1/4th of the width, mirroring enemy at 3/4th
 
 # --- Entity Classes ---
@@ -193,6 +193,22 @@ class Enemy(Entity):
             char = '?'
             super().__init__(x, char)
 
+# --- Item Classes ---
+class Item:
+    """Base class for all items."""
+    def __init__(self, name):
+        self.name = name
+
+class Potion(Item):
+    """Potion item (healing, buff, etc)."""
+    def __init__(self, name):
+        super().__init__(name)
+
+class Equipment(Item):
+    """Equipment item (weapons, armor, etc)."""
+    def __init__(self, name):
+        super().__init__(name)
+
 # --- Room and UI Classes ---
 class Room:
     """Represents the game area."""
@@ -252,6 +268,46 @@ class UI:
     def get_room_counter_line(self, room_number):
         return f"ROOM: {room_number}"
 
+    def get_inventory_box(self, height=7, width=16):
+        """
+        Draws a cross (no extra borders) dividing the box into 4 slots.
+        """
+        lines = []
+        mid_row = height // 2
+        mid_col = width // 2
+
+        for row in range(height):
+            if row == mid_row:
+                # Horizontal line
+                lines.append(" " * width)
+                lines[-1] = lines[-1][:1] + "-" * (width - 2) + lines[-1][-1:]
+            else:
+                # Vertical line
+                line = [" "] * width
+                line[mid_col] = "|"
+                lines.append("".join(line))
+        return lines
+
+    def get_equipment_box(self, height=7, width=16):
+        """
+        Draws a cross (no extra borders) dividing the box into 4 slots for equipment.
+        """
+        lines = []
+        mid_row = height // 2
+        mid_col = width // 2
+
+        for row in range(height):
+            if row == mid_row:
+                # Horizontal line
+                lines.append(" " * width)
+                lines[-1] = lines[-1][:1] + "-" * (width - 2) + lines[-1][-1:]
+            else:
+                # Vertical line
+                line = [" "] * width
+                line[mid_col] = "|"
+                lines.append("".join(line))
+        return lines
+
 class Renderer:
     """Handles all drawing to the terminal."""
     def __init__(self, width, height):
@@ -263,7 +319,7 @@ class Renderer:
         print('\033[H', end='')
 
     def render(self, player, room, ui, boss_info_lines=None, battle_log_lines=None, intro_message=None, room_number=None):
-        self.clear()  # <-- Always clear at the start of render
+        self.clear()
         stats_col_width = 16
         boss_col_width = 16
         term_size = shutil.get_terminal_size((80, 24))
@@ -281,8 +337,6 @@ class Renderer:
         for y in range(self.height):
             print(' ' * pad_left + '|' + stats_lines[y].ljust(stats_col_width), end='')
             line = room.get_landscape_line(y)
-            # --- PATCH START ---
-            # Show multi-line intro_message centered vertically
             if intro_message and (self.height // 2 - 2) <= y < (self.height // 2 - 2) + len(intro_message.split('\n')):
                 lines = intro_message.split('\n')
                 idx = y - (self.height // 2 - 2)
@@ -297,15 +351,13 @@ class Renderer:
                         line[self.enemy.x] = self.enemy.char
                 print('|' + ''.join(line) + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
-            # --- PATCH END ---
 
         print(' ' * pad_left + '+' + '-' * stats_col_width + '+' + '-' * self.width + '+' + '-' * boss_col_width + '+')
 
-        battle_log_height = 6
+        battle_log_height = 7  # Increased by 1 for even bottom row
         if battle_log_lines is None:
             battle_log_lines = []
 
-        # Add room counter to the first line of battle log
         room_num = room_number
         if room_num is None:
             room_num = getattr(room, 'current_room', 1)
@@ -315,9 +367,13 @@ class Renderer:
         elif len(battle_log_lines) < battle_log_height:
             battle_log_lines = [room_line] + battle_log_lines
 
+        inventory_box = ui.get_inventory_box(height=battle_log_height, width=stats_col_width)
+        equipment_box = ui.get_equipment_box(height=battle_log_height, width=boss_col_width)
         for i in range(battle_log_height):
+            inv = inventory_box[i] if i < len(inventory_box) else ''
             log = battle_log_lines[i] if i < len(battle_log_lines) else ''
-            print(' ' * pad_left + '|' + ' ' * stats_col_width + '|' + log.ljust(self.width) + '|' + ' ' * boss_col_width + '|')
+            eq = equipment_box[i] if i < len(equipment_box) else ''
+            print(' ' * pad_left + '|' + inv + '|' + log.ljust(self.width) + '|' + eq + '|')
 
         print(' ' * pad_left + '+' + '-' * stats_col_width + '+' + '-' * self.width + '+' + '-' * boss_col_width + '+')
 
