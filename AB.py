@@ -35,11 +35,37 @@ class Player(Entity):
         self.xp_to_next = 10  # Start with 10 XP for level 2
 
     def gain_xp(self, amount):
+        leveled_up = False
         self.xp += amount
         while self.xp >= self.xp_to_next:
             self.xp -= self.xp_to_next
             self.level += 1
             self.xp_to_next = int(self.xp_to_next * 1.5)  # XP needed increases each level
+            leveled_up = True
+        return leveled_up
+
+    def upgrade_stat(self, stat):
+        if stat == "attack":
+            self.attack += 1
+        elif stat == "attack_speed":
+            self.attack_speed += 0.1
+        elif stat == "crit_chance":
+            self.crit_chance = min(1.0, self.crit_chance + 0.05)
+        elif stat == "crit_damage":
+            self.crit_damage += 0.2
+        elif stat == "defence":
+            self.defence += 1
+        elif stat == "health_regen":
+            self.health_regen += 1
+        elif stat == "thorn_damage":
+            self.thorn_damage += 1
+        elif stat == "lifesteal":
+            self.lifesteal = min(1.0, self.lifesteal + 0.05)
+        elif stat == "dodge_chance":
+            self.dodge_chance = min(1.0, self.dodge_chance + 0.05)
+        elif stat == "max_hp":
+            self.max_hp += 5
+            self.hp += 5
 
 class Enemy(Entity):
     """Enemy character with different types."""
@@ -179,22 +205,23 @@ class Renderer:
         for y in range(self.height):
             print(' ' * pad_left + '|' + stats_lines[y].ljust(stats_col_width), end='')
             line = room.get_landscape_line(y)
-            if y == self.height - 1:
-                if 0 <= player.x < self.width:
-                    line[player.x] = player.char
-            if self.enemy is not None and y == self.height - 1:
-                if 0 <= self.enemy.x < self.width:
-                    line[self.enemy.x] = self.enemy.char
-            if intro_message and y == self.height // 2:
+            # --- PATCH START ---
+            # Show multi-line intro_message centered vertically
+            if intro_message and (self.height // 2 - 2) <= y < (self.height // 2 - 2) + len(intro_message.split('\n')):
                 lines = intro_message.split('\n')
-                for idx, msg in enumerate(lines):
-                    if y + idx < self.height:
-                        print('|' + msg.center(self.width) + '|', end='')
-                        print(boss_info_lines[y + idx].ljust(boss_col_width) + '|')
-                        break
+                idx = y - (self.height // 2 - 2)
+                msg = lines[idx] if idx < len(lines) else ''
+                print('|' + msg.center(self.width) + '|', end='')
+                print(boss_info_lines[y].ljust(boss_col_width) + '|')
             else:
+                if y == self.height - 1:
+                    if 0 <= player.x < self.width:
+                        line[player.x] = player.char
+                    if self.enemy is not None and 0 <= self.enemy.x < self.width:
+                        line[self.enemy.x] = self.enemy.char
                 print('|' + ''.join(line) + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
+            # --- PATCH END ---
 
         print(' ' * pad_left + '+' + '-' * stats_col_width + '+' + '-' * self.width + '+' + '-' * boss_col_width + '+')
 
@@ -280,6 +307,45 @@ class Announcements:
 
     def lose(self, enemy):
         self.wait_for_space("You lose!\nPress spacebar to restart", enemy=enemy, show_player=False, room_number=self.current_room)
+
+    def level_up_screen(self, player):
+        # List of upgradable stats and their display names
+        stat_options = [
+            ("attack", "Attack +1"),
+            ("attack_speed", "Attack Speed +0.1"),
+            ("crit_chance", "Crit Chance +5%"),
+            ("crit_damage", "Crit Damage +0.2"),
+            ("defence", "Defence +1"),
+            ("health_regen", "Regen +1"),
+            ("thorn_damage", "Thorn +1"),
+            ("lifesteal", "Lifesteal +5%"),
+            ("dodge_chance", "Dodge +5%"),
+            ("max_hp", "Max HP +5"),
+        ]
+        choices = random.sample(stat_options, 3)
+        selected = 0
+
+        while True:
+            lines = ["LVL UP!", "", "Choose a stat to upgrade:"]
+            for i, (stat, desc) in enumerate(choices):
+                prefix = "-> " if i == selected else "   "
+                lines.append(f"{prefix}{i+1}. {desc}")
+            message = "\n".join(lines)
+            self.renderer.render(self.player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            # Keyboard navigation: arrows or 1/2/3
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'1', b'2', b'3']:
+                    selected = int(key) - 1
+                    break
+                elif key in [b'H', b'K', b'w']:  # Up arrow or W
+                    selected = (selected - 1) % 3
+                elif key in [b'P', b'M', b's']:  # Down arrow or S
+                    selected = (selected + 1) % 3
+                elif key == b'\r' or key == b' ':  # Enter or Space
+                    break
+            time.sleep(0.08)
+        player.upgrade_stat(choices[selected][0])
 
 # --- Animations Class ---
 class Animations:
@@ -485,6 +551,8 @@ class Battle:
         enemy_next_attack = 0.0
         clock = 0.0
         time_step = 0.05
+        leveled_up_this_battle = False
+        prev_level = player.level
         while player.hp > 0 and enemy.hp > 0 and running_flag():
             acted = False
             if clock >= player_next_attack:
@@ -520,7 +588,10 @@ class Battle:
                 if hasattr(self, 'animations') and self.animations:
                     self.animations.death(enemy)
                 self.renderer.enemy = None
-                player.gain_xp(6)
+                # --- Level up logic here ---
+                leveled_up = player.gain_xp(6)
+                if leveled_up and hasattr(self, 'announcements') and self.announcements:
+                    self.announcements.level_up_screen(player)
                 return "win"
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
@@ -542,6 +613,7 @@ class Game:
         self.animations = Animations(self.renderer, self.room, self.ui, self.player)
         self.battle_system = Battle(self.renderer, self.ui, self.room)
         self.battle_system.animations = self.animations
+        self.battle_system.announcements = self.announcements  # <-- Add this line
         self.enemy = None
         self.running = True
         self.current_room = 1  # Add this line to track room number
