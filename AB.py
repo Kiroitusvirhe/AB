@@ -33,7 +33,9 @@ class Player(Entity):
         self.xp = 0
         self.level = 1
         self.xp_to_next = 10  # Start with 10 XP for level 2
-        self.regen_timer = 0.0  # Add this line
+        self.regen_timer = 0.0
+        self.skill_cooldown = 10.0  # Default, override in subclasses
+        self.skill_cooldown_timer = 0.0
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -71,11 +73,32 @@ class Player(Entity):
     def reset_regen_timer(self):
         self.regen_timer = 0.0
 
+    def can_use_skill(self):
+        return self.skill_cooldown_timer >= self.skill_cooldown
+
+    def use_skill(self, *args, **kwargs):
+        return None  # To be overridden
+
+    def update_skill_timer(self, dt):
+        self.skill_cooldown_timer += dt
+
 # --- Player Job Classes ---
 class Fighter(Player):
     def __init__(self, x):
         super().__init__(x)
         self.upgrade_stat("attack")
+        self.skill_cooldown = 8.0  # seconds
+
+    def use_skill(self, enemies):
+        if self.can_use_skill():
+            log = []
+            for enemy in enemies:
+                damage = max(0, self.attack * 2 - enemy.defence)
+                enemy.hp -= damage
+                log.append(f"{enemy.char} takes {damage} from BIG SLASH")
+            self.skill_cooldown_timer = 0.0
+            return f"Fighter uses BIG SLASH! " + "; ".join(log)
+        return None
 
 class Assassin(Player):
     def __init__(self, x):
@@ -84,13 +107,42 @@ class Assassin(Player):
         self.upgrade_stat("attack_speed")
         self.upgrade_stat("attack_speed")  # +2 levels to attack speed
         self.upgrade_stat("dodge_chance")
+        self.skill_cooldown = 6.0  # seconds
+
+    def use_skill(self, enemy):
+        if self.can_use_skill():
+            results = []
+            orig_crit = self.crit_chance
+            self.crit_chance = min(1.0, self.crit_chance + 0.10)
+            for _ in range(2):
+                damage = max(0, self.attack - enemy.defence)
+                crit = False
+                if random.random() < self.crit_chance:
+                    damage = int(damage * self.crit_damage)
+                    crit = True
+                enemy.hp -= damage
+                results.append(f"{damage}{' (CRIT!)' if crit else ''}")
+            self.crit_chance = orig_crit
+            self.skill_cooldown_timer = 0.0
+            return f"Assassin uses DOUBLE ATTACK! ({' + '.join(results)} dmg)"
+        return None
 
 class Paladin(Player):
     def __init__(self, x):
         super().__init__(x)
         self.upgrade_stat("defence")
         self.upgrade_stat("max_hp")  # +5 HP
+        self.skill_cooldown = 12.0  # seconds
 
+    def use_skill(self):
+        if self.can_use_skill():
+            heal = max(1, int(self.max_hp * 0.10))
+            self.hp = min(self.max_hp, self.hp + heal)
+            self.skill_cooldown_timer = 0.0
+            return f"Paladin uses BLESSING LIGHT! (+{heal} HP)"
+        return None
+
+# --- Enemy Classes ---
 class Enemy(Entity):
     """Enemy character with different types."""
     def __init__(self, x, enemy_type='basic'):
@@ -606,8 +658,26 @@ class Battle:
         leveled_up_this_battle = False
         prev_level = player.level
         regen_base_interval = 6.0  # seconds for 1 regen
+
+        # For future: support multiple enemies
+        enemies = [enemy]
+
         while player.hp > 0 and enemy.hp > 0 and running_flag():
             acted = False
+
+            # --- SKILL USAGE (automatic) ---
+            player.update_skill_timer(time_step)
+            skill_log = None
+            if isinstance(player, Fighter) and player.can_use_skill():
+                skill_log = player.use_skill(enemies)
+            elif isinstance(player, Assassin) and player.can_use_skill():
+                skill_log = player.use_skill(enemy)
+            elif isinstance(player, Paladin) and player.can_use_skill():
+                skill_log = player.use_skill()
+            if skill_log:
+                battle_log.append(skill_log)
+                acted = True
+
             if clock >= player_next_attack:
                 msg = self.attack(
                     player, enemy,
