@@ -36,6 +36,7 @@ class Player(Entity):
         self.regen_timer = 0.0
         self.skill_cooldown = 10.0  # Default, override in subclasses
         self.skill_cooldown_timer = 0.0
+        self.potions = [None, None, None, None]  # 4 potion slots
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -200,14 +201,41 @@ class Item:
         self.name = name
 
 class Potion(Item):
-    """Potion item (healing, buff, etc)."""
+    """Base class for all potions."""
     def __init__(self, name):
         super().__init__(name)
 
-class Equipment(Item):
-    """Equipment item (weapons, armor, etc)."""
-    def __init__(self, name):
+    def use(self, player):
+        pass  # To be overridden
+
+class HealingPotion(Potion):
+    """Base class for healing potions."""
+    heal_percent = 0.0  # Override in subclasses
+
+    def __init__(self, name=None):
+        if name is None:
+            name = self.__class__.__name__
         super().__init__(name)
+
+    def use(self, player):
+        heal_amount = max(1, int(player.max_hp * self.heal_percent))
+        player.hp = min(player.max_hp, player.hp + heal_amount)
+        return f"{player.char} uses {self.name} and heals {heal_amount} HP!"
+
+class SmallHealingPotion(HealingPotion):
+    heal_percent = 0.25
+    def __init__(self):
+        super().__init__("Small Health Potion")
+
+class MediumHealingPotion(HealingPotion):
+    heal_percent = 0.5
+    def __init__(self):
+        super().__init__("Medium Health Potion")
+
+class MaxHealingPotion(HealingPotion):
+    heal_percent = 1.0
+    def __init__(self):
+        super().__init__("Max Health Potion")
 
 # --- Room and UI Classes ---
 class Room:
@@ -507,6 +535,44 @@ class Announcements:
             time.sleep(0.08)
         return selected
 
+    def pre_battle_item_use(self, player):
+        while any(player.potions):
+            # Show inventory and ask if the player wants to use a potion
+            lines = ["Use a potion before battle?"]
+            for idx, potion in enumerate(player.potions):
+                if potion:
+                    lines.append(f"{idx+1}. {potion.name}")
+                else:
+                    lines.append(f"{idx+1}. (empty)")
+            lines.append("[Press 1-4 to use, or space to start battle]")
+            message = "\n".join(lines)
+            self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'1', b'2', b'3', b'4']:
+                    slot = int(key) - 1
+                    if player.potions[slot]:
+                        log = player.potions[slot].use(player)
+                        player.potions[slot] = None
+                        # Show heal message
+                        self.wait_for_space(log, show_player=True, room_number=self.current_room)
+                elif key == b' ':
+                    break
+            time.sleep(0.08)
+
+    def loot_screen(self, found_items):
+        # found_items: list of Item objects
+        if not found_items:
+            return
+        names = [item.name for item in found_items]
+        if len(names) == 1:
+            msg = f"You found {names[0]}!"
+        elif len(names) == 2:
+            msg = f"You found {names[0]} and {names[1]}!"
+        else:
+            msg = "You found " + ", ".join(names[:-1]) + f", and {names[-1]}!"
+        self.wait_for_space(msg, show_player=True, room_number=self.current_room)
+
 # --- Animations Class ---
 class Animations:
     """Handles all game animations (player slide, attacks, etc)."""
@@ -780,7 +846,24 @@ class Battle:
                 leveled_up = player.gain_xp(6)
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
                     self.announcements.level_up_screen(player)
-                return "win"
+                # --- Loot drop: 10% chance for potion ---
+                found_items = []
+                if random.random() < 0.10:
+                    found_items.append(SmallHealingPotion())
+                # (Add equipment drops here in the future)
+                if found_items:
+                    self.announcements.loot_screen(found_items)
+                    for item in found_items:
+                        if isinstance(item, Potion):
+                            # Try to add to inventory
+                            for i in range(4):
+                                if player.potions[i] is None:
+                                    player.potions[i] = item
+                                    break
+                        else:
+                            # Inventory full, just skip for now (or add prompt later)
+                            pass
+                return "win"  # <--- ADD THIS LINE
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
                     self.animations.death(player)
@@ -843,6 +926,9 @@ class Game:
             self.player = Player(x=PLAYER_START_X)
             self.announcements.player = self.player
             self.animations.player = self.player
+            # Give the player a Small Healing Potion for testing
+            self.player.potions[0] = SmallHealingPotion()
+
             # --- Job selection continues ---
             job_idx = self.announcements.job_select_screen()
             if job_idx == 0:
@@ -853,6 +939,9 @@ class Game:
                 self.player = Paladin(x=PLAYER_START_X)
             self.reset_player_position()
             self.current_room = 1  # Reset room counter on new game
+
+            # Give the player a Small Healing Potion for testing
+            self.player.potions[0] = SmallHealingPotion()
 
             # Update room number and player reference in other classes
             self.announcements.player = self.player
@@ -869,6 +958,10 @@ class Game:
                 self.announcements.current_room = self.current_room
                 self.animations.current_room = self.current_room
                 self.battle_system.current_room = self.current_room
+
+                # --- Prompt for potion use before battle ---
+                self.announcements.pre_battle_item_use(self.player)
+
                 self.announcements.battle_start(self.enemy)
 
                 if self.input_handler.quit:
@@ -877,6 +970,23 @@ class Game:
                 result = self.battle_system.battle(self.player, self.enemy, lambda: self.running)
 
                 if result == "win":
+                    # --- Loot drop: 10% chance for potion ---
+                    found_items = []
+                    if random.random() < 0.10:
+                        found_items.append(SmallHealingPotion())
+                    # (Add equipment drops here in the future)
+                    if found_items:
+                        self.announcements.loot_screen(found_items)
+                        for item in found_items:
+                            if isinstance(item, Potion):
+                                # Try to add to inventory
+                                for i in range(4):
+                                    if self.player.potions[i] is None:
+                                        self.player.potions[i] = item
+                                        break
+                            else:
+                                # Inventory full, just skip for now (or add prompt later)
+                                pass
                     self.current_room += 1  # Increment room counter
                     self.announcements.current_room = self.current_room
                     self.animations.current_room = self.current_room
