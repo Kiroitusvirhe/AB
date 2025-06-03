@@ -82,6 +82,7 @@ class Assassin(Player):
         super().__init__(x)
         self.upgrade_stat("crit_chance")
         self.upgrade_stat("attack_speed")
+        self.upgrade_stat("attack_speed")  # +2 levels to attack speed
         self.upgrade_stat("dodge_chance")
 
 class Paladin(Player):
@@ -114,7 +115,7 @@ class Enemy(Entity):
             self.hp = 5
             self.max_hp = 5
             self.attack = 1
-            self.attack_speed = 2.0
+            self.attack_speed = 1.5
             self.crit_chance = 0.1
             self.crit_damage = 2.0
             self.defence = 0
@@ -715,6 +716,11 @@ class Game:
             self.announcements.intro()
             if self.input_handler.quit:
                 return
+            # --- Reset player to base Player for intro screen (UI box reset) ---
+            self.player = Player(x=PLAYER_START_X)
+            self.announcements.player = self.player
+            self.animations.player = self.player
+            # --- Job selection continues ---
             job_idx = self.announcements.job_select_screen()
             if job_idx == 0:
                 self.player = Fighter(x=PLAYER_START_X)
