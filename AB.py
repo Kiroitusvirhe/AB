@@ -535,7 +535,7 @@ class Announcements:
             time.sleep(0.08)
         return selected
 
-    def pre_battle_item_use(self, player):
+    def pre_battle_item_use(self, player, enemy):
         while any(player.potions):
             # Show inventory and ask if the player wants to use a potion
             lines = ["Use a potion before battle?"]
@@ -554,8 +554,8 @@ class Announcements:
                     if player.potions[slot]:
                         log = player.potions[slot].use(player)
                         player.potions[slot] = None
-                        # Show heal message
-                        self.wait_for_space(log, show_player=True, room_number=self.current_room)
+                        # Show heal message, pass the enemy!
+                        self.wait_for_space(log, enemy=enemy, show_player=True, room_number=self.current_room)
                 elif key == b' ':
                     break
             time.sleep(0.08)
@@ -960,10 +960,11 @@ class Game:
                 self.battle_system.current_room = self.current_room
 
                 # --- Prompt for potion use before battle ---
-                self.announcements.pre_battle_item_use(self.player)
-
-                self.announcements.battle_start(self.enemy)
-
+                used_potion_prompt = any(self.player.potions)
+                self.announcements.pre_battle_item_use(self.player, self.enemy)
+                if not used_potion_prompt:
+                    self.announcements.battle_start(self.enemy)
+                
                 if self.input_handler.quit:
                     return
 
