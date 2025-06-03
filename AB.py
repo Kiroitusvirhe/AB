@@ -1,4 +1,3 @@
-import os
 import time
 import shutil
 import msvcrt
@@ -367,6 +366,17 @@ class Game:
         self.enemy = None
         self.running = True
 
+    # --- Reset Methods ---
+    def reset_player_stats(self):
+        """Reset player stats and position for a new game."""
+        # Re-initialize the player object in-place to preserve references
+        self.player.__init__(x=5)
+
+    def reset_player_position(self):
+        """Only resets position, not stats."""
+        self.player.x = 5
+
+    # --- Game Logic ---
     def spawn_enemy(self):
         enemy_type = random.choice(['basic', 'speedy', 'tough'])
         self.enemy = Enemy(x=(WIDTH * 3) // 4, enemy_type=enemy_type)
@@ -377,15 +387,6 @@ class Game:
         self.input_handler.poll()
         if self.input_handler.quit:
             self.running = False
-
-    def reset_player_position(self):
-        """Only resets position, not stats."""
-        self.player.x = 5
-
-    def reset_player_stats(self):
-        """Reset player stats and position for a new game."""
-        # Re-initialize the player object in-place to preserve references
-        self.player.__init__(x=5)
 
     def run(self):
         while self.running:
