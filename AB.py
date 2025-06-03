@@ -14,7 +14,7 @@ class Entity:
     def __init__(self, x, char):
         self.x = x
         self.char = char
-        self.attack = 1
+        self.attack = 2
         self.attack_speed = 1.0
         self.crit_chance = 0.05
         self.crit_damage = 2.0
@@ -50,7 +50,7 @@ class Enemy(Entity):
             super().__init__(x, char)
             self.hp = 8
             self.max_hp = 8
-            self.attack = 1
+            self.attack = 2
             self.attack_speed = 1.0
             self.crit_chance = 0.1
             self.crit_damage = 2.0
@@ -502,7 +502,7 @@ class Battle:
                 if hasattr(self, 'animations') and self.animations:
                     self.animations.death(enemy)
                 self.renderer.enemy = None
-                player.gain_xp(5)  # Award 5 XP per enemy for now
+                player.gain_xp(6)  # Award 5 XP per enemy for now
                 return "win"
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
