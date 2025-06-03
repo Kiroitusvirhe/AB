@@ -16,7 +16,7 @@ class Entity:
         self.char = char        # Character used to represent the entity on screen
         # Offensive stats
         self.attack = 1         # Attack power
-        self.attack_speed = 1.0 # How fast the entity attacks
+        self.attack_speed = 1.0 # How fast the entity attacks (attacks per second)
         self.crit_chance = 0.05 # Chance to land a critical hit (5%)
         self.crit_damage = 2.0  # Damage multiplier for critical hits
         # Defensive stats
@@ -26,6 +26,7 @@ class Entity:
         self.health_regen = 0   # Health regenerated per turn
         self.thorn_damage = 0   # Damage dealt back to attackers
         self.lifesteal = 0.0    # Percentage of damage healed on attack
+        self.dodge_chance = 0.0 # Chance to dodge an incoming attack (0-1)
 
 class Player(Entity):
     """Player character."""
@@ -52,6 +53,7 @@ class Enemy(Entity):
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
+            self.dodge_chance = 0.05
         elif enemy_type == 'speedy':
             char = 'S'
             super().__init__(x, char)
@@ -65,6 +67,7 @@ class Enemy(Entity):
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
+            self.dodge_chance = 0.15
         elif enemy_type == 'tough':
             char = 'O'
             super().__init__(x, char)
@@ -78,6 +81,7 @@ class Enemy(Entity):
             self.health_regen = 1
             self.thorn_damage = 1
             self.lifesteal = 0.0
+            self.dodge_chance = 0.02
         else:
             char = '?'
             super().__init__(x, char)
@@ -114,6 +118,7 @@ class UI:
             f"REGEN: {player.health_regen}",
             f"THORN: {player.thorn_damage}",
             f"LIFESTEAL: {player.lifesteal}",
+            f"DODGE%: {int(player.dodge_chance * 100)}",
         ]
         # Pad with empty lines so the stats box is as tall as the game area
         stats += [''] * (game_height - len(stats))
@@ -135,6 +140,7 @@ class UI:
                 f"REGEN: {enemy.health_regen}",
                 f"THORN: {enemy.thorn_damage}",
                 f"LIFESTEAL: {enemy.lifesteal}",
+                f"DODGE%: {int(enemy.dodge_chance * 100)}",
             ]
             stats += [''] * (game_height - len(stats))
         return stats
@@ -304,6 +310,111 @@ class Animations:
         self.renderer.render(self.player, self.room, self.ui)
         time.sleep(0.3)
 
+# --- Battle System Class ---
+class Battle:
+    """Handles the battle logic between two entities, using all stats."""
+    def __init__(self, renderer, ui, room):
+        self.renderer = renderer
+        self.ui = ui
+        self.room = room
+
+    def attack(self, attacker, defender):
+        """
+        Handles a single attack from attacker to defender, applying all stats.
+        Returns a string describing the attack for the battle log.
+        """
+        import random
+
+        # Dodge check
+        if random.random() < defender.dodge_chance:
+            return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
+
+        # Calculate base damage
+        damage = max(1, attacker.attack - defender.defence)
+
+        # Critical hit check
+        crit = False
+        if random.random() < attacker.crit_chance:
+            damage = int(damage * attacker.crit_damage)
+            crit = True
+
+        # Apply lifesteal (heal attacker)
+        if attacker.lifesteal > 0:
+            heal = int(damage * attacker.lifesteal)
+            attacker.hp = min(attacker.max_hp, attacker.hp + heal)
+
+        # Apply damage to defender
+        defender.hp -= damage
+
+        # Apply thorn damage (defender reflects damage back)
+        thorn_msg = ""
+        if defender.thorn_damage > 0:
+            attacker.hp -= defender.thorn_damage
+            thorn_msg = f" {attacker.char} takes {defender.thorn_damage} thorn damage!"
+
+        # Compose log message
+        msg = f"{attacker.char} hits {defender.char} for {damage} damage"
+        if crit:
+            msg += " (CRIT!)"
+        msg += "!" + thorn_msg
+
+        return msg
+
+    def battle(self, player, enemy, running_flag):
+        """
+        Runs the autobattle between player and enemy using all stats.
+        Returns "win" if player wins, "lose" if enemy wins.
+        """
+        battle_log = []
+        player_next_attack = 0.0
+        enemy_next_attack = 0.0
+        clock = 0.0
+        time_step = 0.05  # seconds per simulation step
+
+        # Main battle loop
+        while player.hp > 0 and enemy.hp > 0 and running_flag():
+            acted = False
+            # Player attacks if it's time
+            if clock >= player_next_attack:
+                msg = self.attack(player, enemy)
+                battle_log.append(msg)
+                player_next_attack += 1.0 / player.attack_speed
+                acted = True
+            # Enemy attacks if it's time
+            if clock >= enemy_next_attack and enemy.hp > 0:
+                msg = self.attack(enemy, player)
+                battle_log.append(msg)
+                enemy_next_attack += 1.0 / enemy.attack_speed
+                acted = True
+            # Regeneration for both entities (if any)
+            if player.health_regen > 0 and int(clock * 10) % 10 == 0:
+                player.hp = min(player.max_hp, player.hp + player.health_regen)
+            if enemy.health_regen > 0 and int(clock * 10) % 10 == 0:
+                enemy.hp = min(enemy.max_hp, enemy.hp + enemy.health_regen)
+            # Render only if something happened or every so often
+            if acted or int(clock * 10) % 2 == 0:
+                self.renderer.clear()
+                self.renderer.render(
+                    player, self.room, self.ui,
+                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                    battle_log_lines=battle_log[-6:]
+                )
+            if enemy.hp <= 0:
+                self.renderer.enemy = None  # Remove enemy from renderer after battle
+                return "win"
+            if player.hp <= 0:
+                # Player disappears, enemy stays visible
+                player.x = -1
+                self.renderer.clear()
+                self.renderer.render(
+                    player, self.room, self.ui,
+                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                    battle_log_lines=battle_log[-6:]
+                )
+                return "lose"
+            time.sleep(time_step)
+            clock += time_step
+
 # --- Main Game Loop ---
 class Game:
     """Main game class. Manages game state and runs the main loop."""
@@ -315,6 +426,7 @@ class Game:
         self.input_handler = InputHandler()      # Create the input handler
         self.announcements = Announcements(self.renderer, self.ui, self.room, self.player, self.input_handler)
         self.animations = Animations(self.renderer, self.room, self.ui, self.player)
+        self.battle_system = Battle(self.renderer, self.ui, self.room)
         self.enemy = None                        # Current enemy in the room
         self.running = True                      # Game running flag
 
@@ -331,54 +443,6 @@ class Game:
         self.input_handler.poll()
         if self.input_handler.quit:
             self.running = False
-
-    def battle(self):
-        """Autobattle between player and enemy using attack speed (not turn-based)."""
-        battle_log = []
-        player_next_attack = 0.0
-        enemy_next_attack = 0.0
-        clock = 0.0
-        time_step = 0.05  # seconds per simulation step
-
-        while self.player.hp > 0 and self.enemy.hp > 0 and self.running:
-            acted = False
-            # Player attacks if it's time
-            if clock >= player_next_attack:
-                dmg = max(1, self.player.attack - self.enemy.defence)
-                self.enemy.hp -= dmg
-                battle_log.append(f"Player hits Enemy for {dmg}!")
-                player_next_attack += 1.0 / self.player.attack_speed
-                acted = True
-            # Enemy attacks if it's time
-            if clock >= enemy_next_attack and self.enemy.hp > 0:
-                dmg = max(1, self.enemy.attack - self.player.defence)
-                self.player.hp -= dmg
-                battle_log.append(f"Enemy hits Player for {dmg}!")
-                enemy_next_attack += 1.0 / self.enemy.attack_speed
-                acted = True
-            # Render only if something happened or every so often
-            if acted or int(clock * 10) % 2 == 0:
-                self.renderer.clear()
-                self.renderer.render(
-                    self.player, self.room, self.ui,
-                    boss_info_lines=self.ui.get_enemy_stats_lines(self.enemy, self.room.height),
-                    battle_log_lines=battle_log[-6:]
-                )
-            if self.enemy.hp <= 0:
-                self.renderer.enemy = None  # Remove enemy from renderer after battle
-                return "win"
-            if self.player.hp <= 0:
-                # Player disappears, enemy stays visible
-                self.player.x = -1
-                self.renderer.clear()
-                self.renderer.render(
-                    self.player, self.room, self.ui,
-                    boss_info_lines=self.ui.get_enemy_stats_lines(self.enemy, self.room.height),
-                    battle_log_lines=battle_log[-6:]
-                )
-                return "lose"
-            time.sleep(time_step)
-            clock += time_step
 
     def reset_player(self):
         """Reset player stats and position for a new game."""
@@ -413,7 +477,7 @@ class Game:
                 if self.input_handler.quit:
                     return
                 # Battle!
-                result = self.battle()
+                result = self.battle_system.battle(self.player, self.enemy, lambda: self.running)
                 if result == "win":
                     self.announcements.win()
                     # Slide animation to next room after win
