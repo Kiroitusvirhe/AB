@@ -6,7 +6,7 @@ import random
 # --- Game Constants ---
 WIDTH = 60
 HEIGHT = 16
-PLAYER_START_X = 5  # <-- Added constant
+PLAYER_START_X = WIDTH * 1 // 4  # Player starts at 1/4th of the width, mirroring enemy at 3/4th
 
 # --- Entity Classes ---
 class Entity:
@@ -584,10 +584,16 @@ class Battle:
                 interval = regen_base_interval * (0.95 ** (player.health_regen - 1))
                 player.regen_timer += time_step
                 if player.regen_timer >= interval:
-                    player.hp = min(player.max_hp, player.hp + 1)
+                    healed = min(1, player.max_hp - player.hp)
+                    if healed > 0:
+                        player.hp += healed
+                        battle_log.append(f"{player.char} regenerates {healed} HP!")
                     player.regen_timer = 0.0
             if enemy.health_regen > 0 and int(clock * 10) % 10 == 0:
-                enemy.hp = min(enemy.max_hp, enemy.hp + enemy.health_regen)
+                healed = min(enemy.health_regen, enemy.max_hp - enemy.hp)
+                if healed > 0:
+                    enemy.hp += healed
+                    battle_log.append(f"{enemy.char} regenerates {healed} HP!")
             if acted or int(clock * 10) % 2 == 0:
                 self.renderer.render(
                     player, self.room, self.ui,
@@ -638,11 +644,11 @@ class Game:
     def reset_player_stats(self):
         """Reset player stats and position for a new game."""
         # Re-initialize the player object in-place to preserve references
-        self.player.__init__(x=PLAYER_START_X)  # Use constant
+        self.player.__init__(x=PLAYER_START_X)  # Use new constant
 
     def reset_player_position(self):
         """Only resets position, not stats."""
-        self.player.x = PLAYER_START_X  # Use constant
+        self.player.x = PLAYER_START_X  # Use new constant
 
     # --- Game Logic ---
     def spawn_enemy(self):
