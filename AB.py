@@ -217,14 +217,14 @@ class UI:
             f"XP: {player.xp}/{player.xp_to_next}",
             f"HP: {player.hp}/{player.max_hp}",
             f"ATK: {player.attack}",
-            f"ATK SPD: {player.attack_speed}",
-            f"CRIT%: {int(player.crit_chance * 100)}",
-            f"CRIT DMG: {player.crit_damage}",
+            f"ATK SPD: {player.attack_speed:.1f}",
+            f"CRIT%: {int(round(player.crit_chance * 100))}",
+            f"CRIT DMG: {player.crit_damage:.1f}",
             f"DEF: {player.defence}",
             f"REGEN: {player.health_regen}",
             f"THORN: {player.thorn_damage}",
-            f"LIFESTEAL: {player.lifesteal}",
-            f"DODGE%: {int(player.dodge_chance * 100)}",
+            f"LIFESTEAL: {player.lifesteal:.1f}",
+            f"DODGE%: {int(round(player.dodge_chance * 100))}",
         ]
         stats += [''] * (game_height - len(stats))
         return stats
@@ -237,14 +237,14 @@ class UI:
                 f"ENEMY: {enemy.char}",
                 f"HP: {enemy.hp}/{enemy.max_hp}",
                 f"ATK: {enemy.attack}",
-                f"ATK SPD: {enemy.attack_speed}",
-                f"CRIT%: {int(enemy.crit_chance * 100)}",
-                f"CRIT DMG: {enemy.crit_damage}",
+                f"ATK SPD: {enemy.attack_speed:.1f}",
+                f"CRIT%: {int(round(enemy.crit_chance * 100))}",
+                f"CRIT DMG: {enemy.crit_damage:.1f}",
                 f"DEF: {enemy.defence}",
                 f"REGEN: {enemy.health_regen}",
                 f"THORN: {enemy.thorn_damage}",
-                f"LIFESTEAL: {enemy.lifesteal}",
-                f"DODGE%: {int(enemy.dodge_chance * 100)}",
+                f"LIFESTEAL: {enemy.lifesteal:.1f}",
+                f"DODGE%: {int(round(enemy.dodge_chance * 100))}",
             ]
             stats += [''] * (game_height - len(stats))
         return stats
