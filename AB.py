@@ -291,6 +291,53 @@ class Animations:
         self.renderer.render(self.player, self.room, self.ui)
         time.sleep(0.2)
 
+    def slash(self, attacker, target=None, boss_info_lines=None, battle_log_lines=None):
+        """Show a directional slash effect next to the attacker, facing the target, using the main renderer."""
+        y = self.room.height - 1
+
+        if target is not None and attacker.x < target.x:
+            frames = ['>', '>>']
+            pos = attacker.x + 1
+        else:
+            frames = ['<', '<<']
+            pos = attacker.x - 1
+
+        old_get_landscape_line = self.room.get_landscape_line
+
+        def make_slash_line(frame):
+            line = [' '] * self.room.width
+            if 0 <= attacker.x < self.room.width:
+                line[attacker.x] = attacker.char
+            if 0 <= pos < self.room.width:
+                for i, ch in enumerate(frame):
+                    if 0 <= pos + i < self.room.width:
+                        line[pos + i] = ch
+            return line
+
+        try:
+            for frame in frames:
+                def patched_get_landscape_line(row):
+                    if row == y:
+                        return make_slash_line(frame)
+                    else:
+                        return old_get_landscape_line(row)
+                self.room.get_landscape_line = patched_get_landscape_line
+                self.renderer.clear()
+                self.renderer.render(
+                    self.player, self.room, self.ui,
+                    boss_info_lines=boss_info_lines,
+                    battle_log_lines=battle_log_lines
+                )
+                time.sleep(0.08)
+        finally:
+            self.room.get_landscape_line = old_get_landscape_line
+        self.renderer.clear()
+        self.renderer.render(
+            self.player, self.room, self.ui,
+            boss_info_lines=boss_info_lines,
+            battle_log_lines=battle_log_lines
+        )
+
 # --- Battle System Class ---
 class Battle:
     """Handles the battle logic between two entities, using all stats."""
@@ -299,7 +346,10 @@ class Battle:
         self.ui = ui
         self.room = room
 
-    def attack(self, attacker, defender):
+    def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None):
+        # Play slash animation if available
+        if hasattr(self, 'animations') and self.animations:
+            self.animations.slash(attacker, defender, boss_info_lines, battle_log_lines)
         if random.random() < defender.dodge_chance:
             return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
         damage = max(1, attacker.attack - defender.defence)
@@ -332,12 +382,20 @@ class Battle:
         while player.hp > 0 and enemy.hp > 0 and running_flag():
             acted = False
             if clock >= player_next_attack:
-                msg = self.attack(player, enemy)
+                msg = self.attack(
+                    player, enemy,
+                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                    battle_log_lines=battle_log[-6:]
+                )
                 battle_log.append(msg)
                 player_next_attack += 1.0 / player.attack_speed
                 acted = True
             if clock >= enemy_next_attack and enemy.hp > 0:
-                msg = self.attack(enemy, player)
+                msg = self.attack(
+                    enemy, player,
+                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                    battle_log_lines=battle_log[-6:]
+                )
                 battle_log.append(msg)
                 enemy_next_attack += 1.0 / enemy.attack_speed
                 acted = True
