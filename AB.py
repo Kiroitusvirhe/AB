@@ -33,6 +33,7 @@ class Player(Entity):
         self.xp = 0
         self.level = 1
         self.xp_to_next = 10  # Start with 10 XP for level 2
+        self.regen_timer = 0.0  # Add this line
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -66,6 +67,9 @@ class Player(Entity):
         elif stat == "max_hp":
             self.max_hp += 5
             self.hp += 5
+
+    def reset_regen_timer(self):
+        self.regen_timer = 0.0
 
 class Enemy(Entity):
     """Enemy character with different types."""
@@ -553,6 +557,8 @@ class Battle:
         time_step = 0.05
         leveled_up_this_battle = False
         prev_level = player.level
+        regen_base_interval = 6.0  # seconds for 1 regen
+        player.regen_timer = 0.0  # Reset at start
         while player.hp > 0 and enemy.hp > 0 and running_flag():
             acted = False
             if clock >= player_next_attack:
@@ -573,8 +579,13 @@ class Battle:
                 battle_log.append(msg)
                 enemy_next_attack += 1.0 / enemy.attack_speed
                 acted = True
-            if player.health_regen > 0 and int(clock * 10) % 10 == 0:
-                player.hp = min(player.max_hp, player.hp + player.health_regen)
+            # --- Regen logic with exponential scaling, no minimum interval ---
+            if player.health_regen > 0:
+                interval = regen_base_interval * (0.95 ** (player.health_regen - 1))
+                player.regen_timer += time_step
+                if player.regen_timer >= interval:
+                    player.hp = min(player.max_hp, player.hp + 1)
+                    player.regen_timer = 0.0
             if enemy.health_regen > 0 and int(clock * 10) % 10 == 0:
                 enemy.hp = min(enemy.max_hp, enemy.hp + enemy.health_regen)
             if acted or int(clock * 10) % 2 == 0:
