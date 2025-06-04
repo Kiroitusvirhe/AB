@@ -225,10 +225,10 @@ class Assassin(Player):
                     damage = int(damage * self.crit_damage)
                     crit = True
                 enemy.hp -= damage
-                results.append(f"{damage}{' (CRIT!)' if crit else ''}")
+                results.append(f"{damage:.0f}{' (CRIT!)' if crit else ''}")
             self.crit_chance = orig_crit
             self.skill_cooldown_timer = 0.0
-            return f"Assassin uses DOUBLE ATTACK! ({' + '.join(results)} dmg)"
+            return f"DOUBLE ATTACK: {' + '.join(results)}"
         return None
 
 class Paladin(Player):
@@ -247,7 +247,7 @@ class Paladin(Player):
             heal = max(1, int(self.max_hp * 0.10))
             self.hp = min(self.max_hp, self.hp + heal)
             self.skill_cooldown_timer = 0.0
-            return f"Paladin uses BLESSING LIGHT! (+{heal} HP)"
+            return f"Paladin uses BLESSING LIGHT! (+{heal:.0f} HP)"
         return None
 
 # --- Enemy Classes ---
@@ -927,10 +927,8 @@ class Announcements:
         names = [item_display(item) for item in found_items]
         if len(names) == 1:
             msg = f"You found {names[0]}!"
-        elif len(names) == 2:
-            msg = f"You found {names[0]} and {names[1]}!"
         else:
-            msg = "You found " + ", ".join(names[:-1]) + f", and {names[-1]}!"
+            msg = "You found:\n" + "\n".join(f"- {name}" for name in names)
         self.wait_for_space(msg, show_player=True, room_number=self.current_room)
 
     def equipment_pickup_prompt(self, player, new_item):
