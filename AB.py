@@ -518,6 +518,7 @@ class UI:
             f"THORN: {player.thorn_damage}",
             f"LIFESTEAL: {player.lifesteal:.1f}",
             f"DODGE%: {int(round(player.dodge_chance * 100))}",
+            f"LUCK: {player.luck}",
         ]
         stats += [''] * (game_height - len(stats))
         return stats
