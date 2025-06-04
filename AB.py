@@ -195,9 +195,9 @@ class Fighter(Player):
             for enemy in enemies:
                 damage = max(0, self.attack * 2 - enemy.defence)
                 enemy.hp -= damage
-                log.append(f"{enemy.char} takes {damage} from BIG SLASH")
+                log.append(f"{enemy.char}: {damage:.0f}")
             self.skill_cooldown_timer = 0.0
-            return f"Fighter uses BIG SLASH! " + "; ".join(log)
+            return f"BIG SLASH! " + ", ".join(log)
         return None
 
 class Assassin(Player):
@@ -1479,7 +1479,7 @@ class Game:
 
                 if result == "win":
                     # --- Luck-based loot chance ---
-                    base_chance = 0.10
+                    base_chance = 0.20
                     luck_bonus = (self.player.luck // 2) * 0.01  # +1% per 2 luck
                     loot_chance = base_chance + luck_bonus
 
