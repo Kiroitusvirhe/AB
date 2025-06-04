@@ -471,6 +471,21 @@ class Renderer:
 
         inventory_box = ui.get_inventory_box(height=battle_log_height, width=stats_col_width)
         equipment_box = ui.get_equipment_box(height=battle_log_height, width=boss_col_width)
+        # Inventory slot positions (row, col) for 4 slots in the cross
+        slot_positions = [
+            (1, stats_col_width // 4),           # Top-left
+            (1, 3 * stats_col_width // 4),       # Top-right
+            (battle_log_height - 2, stats_col_width // 4),     # Bottom-left
+            (battle_log_height - 2, 3 * stats_col_width // 4), # Bottom-right
+        ]
+        # Copy inventory_box to a mutable list of lists
+        inv_box = [list(row) for row in inventory_box]
+        for idx, potion in enumerate(getattr(player, "potions", [])):
+            if potion:
+                row, col = slot_positions[idx]
+                inv_box[row][col] = getattr(potion, "char", "?")
+        # Convert back to strings
+        inventory_box = ["".join(row) for row in inv_box]
         for i in range(battle_log_height):
             inv = inventory_box[i] if i < len(inventory_box) else ''
             log = battle_log_lines[i] if i < len(battle_log_lines) else ''
