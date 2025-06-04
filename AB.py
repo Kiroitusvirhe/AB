@@ -37,6 +37,7 @@ class Player(Entity):
         self.skill_cooldown = 10.0  # Default, override in subclasses
         self.skill_cooldown_timer = 0.0
         self.potions = [None, None, None, None]  # 4 potion slots
+        self.equipment_items = [None, None, None, None]  # 4 equipment slots
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -82,6 +83,74 @@ class Player(Entity):
 
     def update_skill_timer(self, dt):
         self.skill_cooldown_timer += dt
+
+    def equip(self, item):
+        stat_map = {
+            Sword: "attack",
+            Shield: "defence",
+            Armor: "max_hp",
+            Fangs: "lifesteal",
+            Boots: "dodge_chance",
+            Amulet: "crit_chance",
+            Gem: "crit_damage",
+            Thorns: "thorn_damage",
+            Ring: "health_regen",
+            Gloves: "attack_speed",
+        }
+        for cls, stat in stat_map.items():
+            if isinstance(item, cls):
+                for _ in range(item.level):
+                    self.upgrade_stat(stat)
+                # You may want to track equipped items per slot:
+                if not hasattr(self, 'equipment'):
+                    self.equipment = {}
+                self.equipment[stat] = item
+                break
+
+    def downgrade_stat(self, stat):
+        # This should reverse the effect of upgrade_stat
+        if stat == "attack":
+            self.attack = max(1, self.attack - 1)
+        elif stat == "attack_speed":
+            self.attack_speed = max(0.1, self.attack_speed - 0.1)
+        elif stat == "crit_chance":
+            self.crit_chance = max(0.0, self.crit_chance - 0.05)
+        elif stat == "crit_damage":
+            self.crit_damage = max(1.0, self.crit_damage - 0.2)
+        elif stat == "defence":
+            self.defence = max(0, self.defence - 1)
+        elif stat == "health_regen":
+            self.health_regen = max(0, self.health_regen - 1)
+        elif stat == "thorn_damage":
+            self.thorn_damage = max(0, self.thorn_damage - 1)
+        elif stat == "lifesteal":
+            self.lifesteal = max(0.0, self.lifesteal - 0.05)
+        elif stat == "dodge_chance":
+            self.dodge_chance = max(0.0, self.dodge_chance - 0.05)
+        elif stat == "max_hp":
+            self.max_hp = max(1, self.max_hp - 5)
+            self.hp = min(self.hp, self.max_hp)
+
+    def unequip(self, item):
+        stat_map = {
+            Sword: "attack",
+            Shield: "defence",
+            Armor: "max_hp",
+            Fangs: "lifesteal",
+            Boots: "dodge_chance",
+            Amulet: "crit_chance",
+            Gem: "crit_damage",
+            Thorns: "thorn_damage",
+            Ring: "health_regen",
+            Gloves: "attack_speed",
+        }
+        for cls, stat in stat_map.items():
+            if isinstance(item, cls):
+                for _ in range(item.level):
+                    self.downgrade_stat(stat)
+                if hasattr(self, 'equipment') and stat in self.equipment:
+                    self.equipment[stat] = None
+                break
 
 # --- Player Job Classes ---
 class Fighter(Player):
@@ -371,6 +440,9 @@ class Gloves(Equipment):
     def __init__(self, level=1):
         super().__init__("gloves", level)  # Attack speed
 
+Equipment.equipment_classes = [
+    Sword, Shield, Armor, Fangs, Boots, Amulet, Gem, Thorns, Ring, Gloves
+]
 # Add more as needed for other stats
 
 # --- Room and UI Classes ---
@@ -724,6 +796,34 @@ class Announcements:
             msg = "You found " + ", ".join(names[:-1]) + f", and {names[-1]}!"
         self.wait_for_space(msg, show_player=True, room_number=self.current_room)
 
+    def equipment_pickup_prompt(self, player, new_item):
+        lines = ["Equipment slots full!"]
+        for idx, eq in enumerate(player.equipment_items):
+            if eq:
+                name = f"Lvl.{eq.level} {eq.name[2:] if eq.name.startswith('a ') or eq.name.startswith('an ') else eq.name}"
+            else:
+                name = "(empty)"
+            lines.append(f"{idx+1}. {name}")
+        new_name = f"Lvl.{new_item.level} {new_item.name[2:] if new_item.name.startswith('a ') or new_item.name.startswith('an ') else new_item.name}"
+        lines.append(f"New: {new_name}")
+        lines.append("Press 1-4 to replace, or SPACE to discard new item.")
+        message = "\n".join(lines)
+        self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'1', b'2', b'3', b'4']:
+                    slot = int(key) - 1
+                    # Unequip old item if present
+                    if player.equipment_items[slot]:
+                        player.unequip(player.equipment_items[slot])
+                    player.equipment_items[slot] = new_item
+                    player.equip(new_item)
+                    return
+                elif key == b' ':
+                    return
+            time.sleep(0.08)
+
 # --- Animations Class ---
 class Animations:
     """Handles all game animations (player slide, attacks, etc)."""
@@ -1013,7 +1113,11 @@ class Battle:
                 if random.random() < 0.10:
                     potion_class = random.choice(HealingPotion.potion_classes)
                     found_items.append(potion_class())
-                # (Add equipment drops here in the future)
+                # --- Loot drop: 10% chance for equipment ---
+                if random.random() < 0.10:
+                    eq_class = random.choice(Equipment.equipment_classes)
+                    eq_level = 1  # You can scale this with room or enemy later
+                    found_items.append(eq_class(level=eq_level))
                 if found_items:
                     self.announcements.loot_screen(found_items)
                     for item in found_items:
@@ -1023,9 +1127,15 @@ class Battle:
                                 if player.potions[i] is None:
                                     player.potions[i] = item
                                     break
-                        else:
-                            # Inventory full, just skip for now (or add prompt later)
-                            pass
+                        elif isinstance(item, Equipment):
+                            for i in range(4):
+                                if player.equipment_items[i] is None:
+                                    player.equipment_items[i] = item
+                                    player.equip(item)
+                                    break
+                            else:
+                                # All slots full, prompt
+                                self.announcements.equipment_pickup_prompt(player, item)
                 # --- Restore original stats before ending battle ---
                 if original_stats:
                     for stat, value in original_stats.items():
@@ -1141,8 +1251,13 @@ class Game:
                     # --- Loot drop: 10% chance for potion ---
                     found_items = []
                     if random.random() < 0.10:
-                        found_items.append(SmallHealingPotion())
-                    # (Add equipment drops here in the future)
+                        potion_class = random.choice(HealingPotion.potion_classes)
+                        found_items.append(potion_class())
+                    # --- Loot drop: 10% chance for equipment ---
+                    if random.random() < 0.10:
+                        eq_class = random.choice(Equipment.equipment_classes)
+                        eq_level = 1  # You can scale this with room or enemy later
+                        found_items.append(eq_class(level=eq_level))
                     if found_items:
                         self.announcements.loot_screen(found_items)
                         for item in found_items:
@@ -1152,9 +1267,15 @@ class Game:
                                     if self.player.potions[i] is None:
                                         self.player.potions[i] = item
                                         break
-                            else:
-                                # Inventory full, just skip for now (or add prompt later)
-                                pass
+                            elif isinstance(item, Equipment):
+                                for i in range(4):
+                                    if self.player.equipment_items[i] is None:
+                                        self.player.equipment_items[i] = item
+                                        self.player.equip(item)
+                                        break
+                                else:
+                                    # All slots full, prompt
+                                    self.announcements.equipment_pickup_prompt(self.player, item)
                     self.current_room += 1  # Increment room counter
                     self.announcements.current_room = self.current_room
                     self.animations.current_room = self.current_room
