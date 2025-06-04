@@ -1356,6 +1356,7 @@ class Game:
         self.enemy = None
         self.running = True
         self.current_room = 1  # Add this line to track room number
+        self.shop_probability = 0.0
 
         # Link room number to other classes
         self.announcements.current_room = self.current_room
@@ -1449,6 +1450,14 @@ class Game:
             self.animations.player_slide_and_disappear()
 
             while self.running:
+                self.current_room += 1
+                # SHOP LOGIC
+                if random.random() < self.shop_probability:
+                    self.show_shop()
+                    self.shop_probability = 0.0
+                else:
+                    self.shop_probability += 0.05
+
                 self.reset_player_position()
                 self.spawn_enemies()  # <--- changed from spawn_enemy()
                 self.announcements.current_room = self.current_room
@@ -1518,6 +1527,78 @@ class Game:
 
                 if self.input_handler.quit:
                     return
+
+    def show_shop(self):
+        healing_potion_cls = random.choice([SmallHealingPotion, MediumHealingPotion, MaxHealingPotion])
+        healing_prices = {SmallHealingPotion: 5, MediumHealingPotion: 10, MaxHealingPotion: 15}
+        healing_price = healing_prices[healing_potion_cls]
+        healing_potion = healing_potion_cls()
+
+        stat_potion_cls = random.choice([
+            AttackPotion, DefencePotion, AttackSpeedPotion, CritChancePotion,
+            CritDamagePotion, ThornPotion, LifestealPotion, DodgePotion, RegenPotion
+        ])
+        stat_potion = stat_potion_cls()
+        stat_price = 10
+
+        eq_class = random.choice(Equipment.equipment_classes)
+        eq_level = max(1, self.current_room // 10)
+        eq_tier = random_tier(self.player.luck)
+        eq_item = eq_class(level=eq_level, tier=eq_tier)
+        tier_index = EQUIPMENT_TIERS.index(eq_tier)
+        eq_price = 10 * eq_level * (tier_index + 1)
+
+        golden_sword = Item("Golden Sword")
+        golden_price = 999
+
+        shop_items = [
+            (healing_potion, healing_price),
+            (stat_potion, stat_price),
+            (eq_item, eq_price),
+            (golden_sword, golden_price),
+        ]
+
+        while True:
+            lines = ["SHOP", ""]
+            for i, (item, price) in enumerate(shop_items):
+                name = item.name if not hasattr(item, "display_name") else item.display_name()
+                lines.append(f"   {i+1}. {name} ({price} gold)")
+            lines.append("")
+            lines.append(f"Gold: {self.player.gold}")
+            lines.append("Press 1-4 to buy, SPACE to leave shop.")
+            message = "\n".join(lines)
+            self.renderer.render(self.player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            # --- Input handling ---
+            while True:
+                if msvcrt.kbhit():
+                    key = msvcrt.getch()
+                    if key in [b'1', b'2', b'3', b'4']:
+                        idx = int(key) - 1
+                        item, price = shop_items[idx]
+                        if self.player.gold >= price:
+                            self.player.gold -= price
+                            # Give item to player, using the same logic as loot
+                            if isinstance(item, Potion):
+                                for i in range(4):
+                                    if self.player.potions[i] is None:
+                                        self.player.potions[i] = item
+                                        break
+                            elif isinstance(item, Equipment):
+                                for i in range(4):
+                                    if self.player.equipment_items[i] is None:
+                                        self.player.equipment_items[i] = item
+                                        self.player.equip(item)
+                                        break
+                            else:
+                                # All slots full, prompt
+                                self.announcements.equipment_pickup_prompt(self.player, item)
+                            self.announcements.wait_for_space(f"You bought {item.name}!", show_player=True, room_number=self.current_room)
+                        else:
+                            self.announcements.wait_for_space("Not enough gold!", show_player=True, room_number=self.current_room)
+                        break  # Re-render shop after purchase or error
+                    elif key == b' ':
+                        return  # Exit shop
+                time.sleep(0.08)
 
 if __name__ == "__main__":
     print('\033[?25l', end='')
