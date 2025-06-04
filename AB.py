@@ -981,7 +981,7 @@ class Animations:
         )
 
     def skill_effect(self, skill_name, attacker, boss_info_lines=None, battle_log_lines=None):
-        y = self.room.height - 3  # Show above the battlefield
+        y = self.room.height - 2  # Same as crit_effect: just above the player
         old_get_landscape_line = self.room.get_landscape_line
 
         def make_skill_line():
