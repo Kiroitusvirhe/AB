@@ -40,6 +40,7 @@ class Player(Entity):
         self.potions = [None, None, None, None]  # 4 potion slots
         self.equipment_items = [None, None, None, None]  # 4 equipment slots
         self.luck = 0  # <--- Add this line
+        self.lifesteal_pool = 0.0  # <--- Add this line for cumulative lifesteal
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -105,7 +106,16 @@ class Player(Entity):
             if isinstance(item, cls):
                 for _ in range(item.level):
                     self.upgrade_stat(stat)
-                # You may want to track equipped items per slot:
+                # Apply tier bonus stats
+                if hasattr(item, "bonus_stats"):
+                    if not hasattr(self, "_equipment_bonus_applied"):
+                        self._equipment_bonus_applied = {}
+                    for bonus_stat, bonus in item.bonus_stats.items():
+                        # Save original value if not already saved
+                        if (id(item), bonus_stat) not in self._equipment_bonus_applied:
+                            self._equipment_bonus_applied[(id(item), bonus_stat)] = getattr(self, bonus_stat)
+                        # Apply bonus multiplicatively
+                        setattr(self, bonus_stat, getattr(self, bonus_stat) * (1 + bonus))
                 if not hasattr(self, 'equipment'):
                     self.equipment = {}
                 self.equipment[stat] = item
@@ -154,6 +164,14 @@ class Player(Entity):
             if isinstance(item, cls):
                 for _ in range(item.level):
                     self.downgrade_stat(stat)
+                # Remove tier bonus stats
+                if hasattr(item, "bonus_stats") and hasattr(self, "_equipment_bonus_applied"):
+                    for bonus_stat, bonus in item.bonus_stats.items():
+                        key = (id(item), bonus_stat)
+                        if key in self._equipment_bonus_applied:
+                            # Restore original value
+                            setattr(self, bonus_stat, self._equipment_bonus_applied[key])
+                            del self._equipment_bonus_applied[key]
                 if hasattr(self, 'equipment') and stat in self.equipment:
                     self.equipment[stat] = None
                 break
@@ -420,14 +438,53 @@ def random_tier(luck=0):
 # --- Equipment Classes ---
 class Equipment(Item):
     """Base class for all equipment items."""
+    # List of stats that can be boosted (excluding luck)
+    BONUS_STATS = [
+        "attack", "attack_speed", "crit_chance", "crit_damage", "defence",
+        "health_regen", "thorn_damage", "lifesteal", "dodge_chance", "max_hp"
+    ]
+    # Short names for display
+    STAT_SHORT = {
+        "attack": "atk",
+        "attack_speed": "spd",
+        "crit_chance": "crit%",
+        "crit_damage": "critdmg",
+        "defence": "def",
+        "health_regen": "regen",
+        "thorn_damage": "thorn",
+        "lifesteal": "lifesteal",
+        "dodge_chance": "dodge",
+        "max_hp": "hp",
+    }
+    # Tier: (number of stats to boost, percent boost)
+    TIER_BONUSES = {
+        "Basic": (0, 0.0),
+        "Good": (1, 0.10),
+        "Rare": (1, 0.20),
+        "Awesome": (1, 0.35),
+        "Legendary": (2, 0.50),
+    }
+
     def __init__(self, name, level=1, tier="Basic"):
         super().__init__(name)
         self.level = level
-        self.tier = tier  # Add tier attribute
+        self.tier = tier
+        self.bonus_stats = {}  # e.g. {"attack": 0.1}
+        num_stats, bonus = self.TIER_BONUSES.get(tier, (0, 0.0))
+        if num_stats > 0:
+            stats = random.sample(self.BONUS_STATS, num_stats)
+            for stat in stats:
+                self.bonus_stats[stat] = bonus
 
     def display_name(self):
-        # Show level and tier in name, e.g. "lvl.1 Basic boots"
-        return f"lvl.{self.level} {self.tier.lower()} {self.name}"
+        # Show level, tier, name, and bonus stat(s) if any
+        bonus = ""
+        if self.bonus_stats:
+            # e.g. (+atk) or (+atk) (+spd)
+            bonus = " " + " ".join(
+                f"(+{self.STAT_SHORT.get(stat, stat)})" for stat in self.bonus_stats
+            )
+        return f"lvl.{self.level} {self.tier.lower()} {self.name}{bonus}"
 
 # Equipment subclasses for each stat
 
@@ -508,15 +565,15 @@ class UI:
         stats = [
             f"LVL: {player.level}",
             f"XP: {player.xp}/{player.xp_to_next}",
-            f"HP: {player.hp}/{player.max_hp}",
-            f"ATK: {player.attack}",
+            f"HP: {player.hp}/{player.max_hp:.0f}",
+            f"ATK: {player.attack:.0f}",
             f"ATK SPD: {player.attack_speed:.1f}",
             f"CRIT%: {int(round(player.crit_chance * 100))}",
             f"CRIT DMG: {player.crit_damage:.1f}",
-            f"DEF: {player.defence}",
-            f"REGEN: {player.health_regen}",
-            f"THORN: {player.thorn_damage}",
-            f"LIFESTEAL: {player.lifesteal:.1f}",
+            f"DEF: {player.defence:.0f}",
+            f"REGEN: {player.health_regen:.0f}",
+            f"THORN: {player.thorn_damage:.0f}",
+            f"LIFESTEAL: {player.lifesteal:.0f}",
             f"DODGE%: {int(round(player.dodge_chance * 100))}",
             f"LUCK: {player.luck}",
         ]
@@ -1101,9 +1158,29 @@ class Battle:
             else:
                 damage = max(1, attacker.attack - defender.defence)
 
-        if attacker.lifesteal > 0:
-            heal = int(damage * attacker.lifesteal)
-            attacker.hp = min(attacker.max_hp, attacker.hp + heal)
+        # --- Cumulative lifesteal logic ---
+        if hasattr(attacker, "lifesteal") and attacker.lifesteal > 0:
+            # Only apply to Player, not enemies
+            if isinstance(attacker, Player):
+                if not hasattr(attacker, "lifesteal_pool"):
+                    attacker.lifesteal_pool = 0.0
+                attacker.lifesteal_pool += damage * attacker.lifesteal
+                healed = 0
+                while attacker.lifesteal_pool >= 1.0:
+                    if attacker.hp < attacker.max_hp:
+                        attacker.hp += 1
+                        healed += 1
+                        attacker.lifesteal_pool -= 1.0
+                    else:
+                        # Don't overheal, but keep lifesteal_pool for later
+                        break
+                if healed > 0:
+                    battle_log = battle_log_lines if battle_log_lines is not None else []
+                    battle_log.append(f"{attacker.char} lifesteals {healed} HP!")
+            else:
+                # For enemies, keep old logic if needed
+                heal = int(damage * attacker.lifesteal)
+                attacker.hp = min(attacker.max_hp, attacker.hp + heal)
         defender.hp -= damage
         thorn_msg = ""
         if defender.thorn_damage > 0:
@@ -1353,13 +1430,16 @@ class Game:
                 result = self.battle_system.battle(self.player, self.enemy, lambda: self.running)
 
                 if result == "win":
-                    # --- Loot drop: 10% chance for potion ---
+                    # --- Luck-based loot chance ---
+                    base_chance = 0.10
+                    luck_bonus = (self.player.luck // 2) * 0.01  # +1% per 2 luck
+                    loot_chance = base_chance + luck_bonus
+
                     found_items = []
-                    if random.random() < 0.10:
+                    if random.random() < loot_chance:
                         potion_class = random.choice(HealingPotion.potion_classes)
                         found_items.append(potion_class())
-                    # --- Loot drop: 10% chance for equipment ---
-                    if random.random() < 0.10:
+                    if random.random() < loot_chance:
                         eq_class = random.choice(Equipment.equipment_classes)
                         eq_level = 1  # You can scale this with room or enemy later
                         eq_tier = random_tier(self.player.luck)  # Use player's luck for tier
