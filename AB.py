@@ -980,6 +980,41 @@ class Animations:
             room_number=self.current_room
         )
 
+    def skill_effect(self, skill_name, attacker, boss_info_lines=None, battle_log_lines=None):
+        y = self.room.height - 3  # Show above the battlefield
+        old_get_landscape_line = self.room.get_landscape_line
+
+        def make_skill_line():
+            line = [' '] * self.room.width
+            word = skill_name
+            start = max(0, min(self.room.width - len(word), attacker.x - len(word)//2))
+            for i, ch in enumerate(word):
+                line[start + i] = ch
+            return line
+
+        try:
+            def patched_get_landscape_line(row):
+                if row == y:
+                    return make_skill_line()
+                else:
+                    return old_get_landscape_line(row)
+            self.room.get_landscape_line = patched_get_landscape_line
+            self.renderer.render(
+                self.player, self.room, self.ui,
+                boss_info_lines=boss_info_lines,
+                battle_log_lines=battle_log_lines,
+                room_number=self.current_room
+            )
+            time.sleep(0.8)
+        finally:
+            self.room.get_landscape_line = old_get_landscape_line
+        self.renderer.render(
+            self.player, self.room, self.ui,
+            boss_info_lines=boss_info_lines,
+            battle_log_lines=battle_log_lines,
+            room_number=self.current_room
+        )
+
 # --- Battle System Class ---
 class Battle:
     """Handles the battle logic between two entities, using all stats."""
@@ -1059,13 +1094,24 @@ class Battle:
             # --- SKILL USAGE (automatic) ---
             player.update_skill_timer(time_step)
             skill_log = None
+            skill_name = None
             if isinstance(player, Fighter) and player.can_use_skill():
                 skill_log = player.use_skill(enemies)
+                skill_name = "BIG SLASH!"
             elif isinstance(player, Assassin) and player.can_use_skill():
                 skill_log = player.use_skill(enemy)
+                skill_name = "DOUBLE ATTACK!"
             elif isinstance(player, Paladin) and player.can_use_skill():
                 skill_log = player.use_skill()
+                skill_name = "BLESSING LIGHT!"
             if skill_log:
+                # Skill animation
+                if hasattr(self, 'animations') and self.animations and skill_name:
+                    self.animations.skill_effect(
+                        skill_name, player,
+                        boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                        battle_log_lines=battle_log[-6:]
+                    )
                 battle_log.append(skill_log)
                 acted = True
 
