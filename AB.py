@@ -195,7 +195,7 @@ class Fighter(Player):
             for enemy in enemies:
                 damage = max(0, self.attack * 2 - enemy.defence)
                 enemy.hp -= damage
-                log.append(f"{enemy.char}: {damage:.0f}")
+                log.append(f"{enemy.char}: {damage:.0f} damage!")
             self.skill_cooldown_timer = 0.0
             return f"BIG SLASH! " + ", ".join(log)
         return None
@@ -219,13 +219,13 @@ class Assassin(Player):
             orig_crit = self.crit_chance
             self.crit_chance = min(1.0, self.crit_chance + 0.10)
             for _ in range(2):
-                damage = max(0, self.attack - enemy.defence)
+                damage = max(1, self.attack - enemy.defence)
                 crit = False
                 if random.random() < self.crit_chance:
                     damage = int(damage * self.crit_damage)
                     crit = True
                 enemy.hp -= damage
-                results.append(f"{damage:.0f}{' (CRIT!)' if crit else ''}")
+                results.append(f"{damage:.0f}{' (CRIT!)' if crit else ''} damage!")
             self.crit_chance = orig_crit
             self.skill_cooldown_timer = 0.0
             return f"DOUBLE ATTACK: {' + '.join(results)}"
@@ -1151,12 +1151,13 @@ class Battle:
         self.current_room = 1  # Will be set by Game
 
     def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None):
+        messages = []
         # Play slash/crit/dodge animation if available
         if hasattr(self, 'animations') and self.animations:
             # Dodge check first
             if random.random() < defender.dodge_chance:
                 self.animations.dodge_effect(defender, boss_info_lines, battle_log_lines)
-                return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
+                return [f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"]
             # Crit check
             crit = False
             if random.random() < attacker.crit_chance:
@@ -1169,7 +1170,7 @@ class Battle:
         else:
             # No animations
             if random.random() < defender.dodge_chance:
-                return f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
+                return [f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"]
             crit = False
             if random.random() < attacker.crit_chance:
                 damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
@@ -1191,14 +1192,12 @@ class Battle:
                         healed += 1
                         attacker.lifesteal_pool -= 1.0
                     else:
-                        # Don't overheal, but keep lifesteal_pool for later
                         break
-                # Always log lifesteal, even if no HP was restored
                 if battle_log_lines is not None:
                     if healed > 0:
-                        battle_log_lines.append(f"{attacker.char} lifesteals {healed} HP!")
-                    elif damage * attacker.lifesteal > 0:
-                        battle_log_lines.append(f"{attacker.char} lifesteals but is already at full HP!")
+                        messages.append(f"{attacker.char} lifesteals {healed:.0f} HP!")
+                    elif damage * attacker.lifesteal > 0 and attacker.hp >= attacker.max_hp:
+                        messages.append(f"{attacker.char} lifesteals but is already at full HP!")
             else:
                 # For enemies, keep old logic if needed
                 heal = int(damage * attacker.lifesteal)
@@ -1212,7 +1211,8 @@ class Battle:
         if 'crit' in locals() and crit:
             msg += " (CRIT!)"
         msg += "!" + thorn_msg
-        return msg
+        messages.append(msg)  # The main attack message
+        return messages
 
     def battle(self, player, enemies, running_flag):
         animations = getattr(self, 'animations', None)
@@ -1265,24 +1265,24 @@ class Battle:
             # --- Player attacks a random living enemy ---
             if clock >= player_next_attack and living_enemies:
                 target = random.choice(living_enemies)
-                msg = self.attack(
+                msgs = self.attack(
                     player, target,
                     boss_info_lines=self.ui.get_enemy_stats_lines(target, self.room.height),
                     battle_log_lines=battle_log[-6:]
                 )
-                battle_log.append(msg)
+                battle_log.extend(msgs)
                 player_next_attack += 1.0 / player.attack_speed
                 acted = True
 
             # --- Each enemy attacks independently ---
             for idx, enemy in enumerate(enemies):
                 if enemy.hp > 0 and clock >= enemy_next_attack[idx]:
-                    msg = self.attack(
+                    msgs = self.attack(
                         enemy, player,
                         boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
                         battle_log_lines=battle_log[-6:]
                     )
-                    battle_log.append(msg)
+                    battle_log.extend(msgs)
                     enemy_next_attack[idx] += 1.0 / enemy.attack_speed
                     acted = True
 
