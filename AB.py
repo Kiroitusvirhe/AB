@@ -1201,17 +1201,14 @@ class Battle:
         msg += "!" + thorn_msg
         return msg
 
-    def battle(self, player, enemy, running_flag):
+    def battle(self, player, enemies, running_flag):
         animations = getattr(self, 'animations', None)
         battle_log = []
         player_next_attack = 0.0
-        enemy_next_attack = 0.0
+        enemy_next_attack = [0.0 for _ in enemies]
         clock = 0.0
         time_step = 0.05
         regen_base_interval = 6.0  # seconds for 1 regen
-
-        # For future: support multiple enemies
-        enemies = [enemy]
 
         # --- Apply stat boosts ---
         original_stats = {}
@@ -1224,52 +1221,59 @@ class Battle:
                     setattr(player, stat, getattr(player, stat) + 1)
             player.stat_boosts.clear()
 
-        while player.hp > 0 and enemy.hp > 0 and running_flag():
+        while player.hp > 0 and any(e.hp > 0 for e in enemies) and running_flag():
             acted = False
 
             # --- SKILL USAGE (automatic) ---
             player.update_skill_timer(time_step)
             skill_log = None
             skill_name = None
+            living_enemies = [e for e in enemies if e.hp > 0]
             if isinstance(player, Fighter) and player.can_use_skill():
-                skill_log = player.use_skill(enemies)
+                skill_log = player.use_skill(living_enemies)
                 skill_name = "BIG SLASH!"
             elif isinstance(player, Assassin) and player.can_use_skill():
-                skill_log = player.use_skill(enemy)
-                skill_name = "DOUBLE ATTACK!"
+                if living_enemies:
+                    skill_log = player.use_skill(random.choice(living_enemies))
+                    skill_name = "DOUBLE ATTACK!"
             elif isinstance(player, Paladin) and player.can_use_skill():
                 skill_log = player.use_skill()
                 skill_name = "BLESSING LIGHT!"
             if skill_log:
-                # Skill animation
                 if hasattr(self, 'animations') and self.animations and skill_name:
                     self.animations.skill_effect(
                         skill_name, player,
-                        boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                        boss_info_lines=self.ui.get_enemy_stats_lines(living_enemies[0] if living_enemies else None, self.room.height),
                         battle_log_lines=battle_log[-6:]
                     )
                 battle_log.append(skill_log)
                 acted = True
 
-            if clock >= player_next_attack:
+            # --- Player attacks a random living enemy ---
+            if clock >= player_next_attack and living_enemies:
+                target = random.choice(living_enemies)
                 msg = self.attack(
-                    player, enemy,
-                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                    player, target,
+                    boss_info_lines=self.ui.get_enemy_stats_lines(target, self.room.height),
                     battle_log_lines=battle_log[-6:]
                 )
                 battle_log.append(msg)
                 player_next_attack += 1.0 / player.attack_speed
                 acted = True
-            if clock >= enemy_next_attack and enemy.hp > 0:
-                msg = self.attack(
-                    enemy, player,
-                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
-                    battle_log_lines=battle_log[-6:]
-                )
-                battle_log.append(msg)
-                enemy_next_attack += 1.0 / enemy.attack_speed
-                acted = True
-            # --- Regen logic with exponential scaling, no minimum interval ---
+
+            # --- Each enemy attacks independently ---
+            for idx, enemy in enumerate(enemies):
+                if enemy.hp > 0 and clock >= enemy_next_attack[idx]:
+                    msg = self.attack(
+                        enemy, player,
+                        boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                        battle_log_lines=battle_log[-6:]
+                    )
+                    battle_log.append(msg)
+                    enemy_next_attack[idx] += 1.0 / enemy.attack_speed
+                    acted = True
+
+            # --- Regen logic ---
             if player.health_regen > 0:
                 interval = regen_base_interval * (0.95 ** (player.health_regen - 1))
                 player.regen_timer += time_step
@@ -1279,59 +1283,40 @@ class Battle:
                         player.hp += healed
                         battle_log.append(f"{player.char} regenerates {healed} HP!")
                     player.regen_timer = 0.0
-            if enemy.health_regen > 0 and int(clock * 10) % 10 == 0:
-                healed = min(enemy.health_regen, enemy.max_hp - enemy.hp)
-                if healed > 0:
-                    enemy.hp += healed
-                    battle_log.append(f"{enemy.char} regenerates {healed} HP!")
+            for enemy in enemies:
+                if enemy.health_regen > 0 and int(clock * 10) % 10 == 0:
+                    healed = min(enemy.health_regen, enemy.max_hp - enemy.hp)
+                    if healed > 0:
+                        enemy.hp += healed
+                        battle_log.append(f"{enemy.char} regenerates {healed} HP!")
+
+            # --- Render ---
             if acted or int(clock * 10) % 2 == 0:
+                # Show stats for the main enemy (first living)
+                main_enemy = next((e for e in enemies if e.hp > 0), None)
+                self.renderer.enemy = main_enemy
                 self.renderer.render(
                     player, self.room, self.ui,
-                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                    boss_info_lines=self.ui.get_enemy_stats_lines(main_enemy, self.room.height),
                     battle_log_lines=battle_log[-6:],
                     room_number=self.current_room
                 )
-            if enemy.hp <= 0:
+
+            # --- Check for win/lose ---
+            if all(e.hp <= 0 for e in enemies):
                 if hasattr(self, 'animations') and self.animations:
-                    self.animations.death(enemy)
+                    for enemy in enemies:
+                        if enemy.hp <= 0:
+                            self.animations.death(enemy)
                 self.renderer.enemy = None
-                # --- Level up logic here ---
-                leveled_up = player.gain_xp(6)
+                leveled_up = player.gain_xp(8 + 2 * self.current_room)
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
                     self.announcements.level_up_screen(player)
-                # --- Loot drop: 10% chance for potion ---
-                found_items = []
-                if random.random() < 0.10:
-                    potion_class = random.choice(HealingPotion.potion_classes)
-                    found_items.append(potion_class())
-                # --- Loot drop: 10% chance for equipment ---
-                if random.random() < 0.10:
-                    eq_class = random.choice(Equipment.equipment_classes)
-                    eq_level = 1  # You can scale this with room or enemy later
-                    found_items.append(eq_class(level=eq_level))
-                if found_items:
-                    self.announcements.loot_screen(found_items)
-                    for item in found_items:
-                        if isinstance(item, Potion):
-                            # Try to add to inventory
-                            for i in range(4):
-                                if player.potions[i] is None:
-                                    player.potions[i] = item
-                                    break
-                        elif isinstance(item, Equipment):
-                            for i in range(4):
-                                if player.equipment_items[i] is None:
-                                    player.equipment_items[i] = item
-                                    player.equip(item)
-                                    break
-                            else:
-                                # All slots full, prompt
-                                self.announcements.equipment_pickup_prompt(player, item)
-                # --- Restore original stats before ending battle ---
+                # Loot logic (unchanged for now)
                 if original_stats:
                     for stat, value in original_stats.items():
                         setattr(player, stat, value)
-                return "win"  # <--- ADD THIS LINE
+                return "win"
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
                     self.animations.death(player)
@@ -1373,9 +1358,37 @@ class Game:
         self.player.x = PLAYER_START_X  # Use new constant
 
     # --- Game Logic ---
-    def spawn_enemy(self):
-        enemy_type = random.choice(['basic', 'speedy', 'tough'])
-        self.enemy = Enemy(x=(WIDTH * 3) // 4, enemy_type=enemy_type)
+    
+    def spawn_enemies(self):
+        """
+        Spawns a main enemy and, for rooms > 10, rolls for additional weaker enemies.
+        Each extra enemy has a rising chance (1% per room after 10, capped at 40%).
+        Each extra enemy is based on an earlier room (so they're weaker).
+        """
+        enemies = []
+        room = self.current_room
+        # Main enemy (always strongest, at current room level)
+        main_enemy_type = random.choice(['basic', 'speedy', 'tough'])
+        main_enemy = Enemy(x=(WIDTH * 3) // 4, enemy_type=main_enemy_type, room_number=room)
+        enemies.append(main_enemy)
+
+        # Only add extra enemies for rooms > 10
+        if room > 10:
+            max_extra = 5  # Arbitrary cap, adjust as needed
+            for i in range(1, max_extra + 1):
+                chance = min(0.01 * (room - 10), 0.40)  # 1% per room after 10, capped at 40%
+                if random.random() < chance:
+                    # Each extra enemy is based on an earlier room (further back for each extra)
+                    weaker_room = max(1, room - 2 * i)
+                    enemy_type = random.choice(['basic', 'speedy', 'tough'])
+                    # Spread out their x positions a bit
+                    x_pos = (WIDTH * 3) // 4 - i * 2
+                    enemies.append(Enemy(x=x_pos, enemy_type=enemy_type, room_number=weaker_room))
+                else:
+                    break  # Stop rolling if one fails
+
+        self.enemies = enemies
+        self.enemy = enemies[0]  # For compatibility with old code
         self.renderer.enemy = self.enemy
 
     def update(self):
@@ -1422,7 +1435,7 @@ class Game:
 
             while self.running:
                 self.reset_player_position()
-                self.spawn_enemy()
+                self.spawn_enemies()  # <--- changed from spawn_enemy()
                 self.announcements.current_room = self.current_room
                 self.animations.current_room = self.current_room
                 self.battle_system.current_room = self.current_room
@@ -1436,7 +1449,7 @@ class Game:
                 if self.input_handler.quit:
                     return
 
-                result = self.battle_system.battle(self.player, self.enemy, lambda: self.running)
+                result = self.battle_system.battle(self.player, self.enemies, lambda: self.running)
 
                 if result == "win":
                     # --- Luck-based loot chance ---
