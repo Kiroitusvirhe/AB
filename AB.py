@@ -390,9 +390,31 @@ HealingPotion.potion_classes = [
 # --- Equipment Tiers ---
 EQUIPMENT_TIERS = ["Basic", "Good", "Rare", "Awesome", "Legendary"]
 
-def random_tier():
-    # Weighted chance: Basic most common, Legendary rarest
-    weights = [0.5, 0.25, 0.15, 0.08, 0.02]
+def random_tier(luck=0):
+    """
+    Returns a random equipment tier, weighted by player's luck.
+    At luck 0: Only Basic, Good, and rarely Rare.
+    Luck unlocks higher tiers and shifts weights.
+    Legendary is always extremely rare.
+    """
+    # Tiers:        0      1      2      3        4
+    #            Basic   Good   Rare  Awesome  Legendary
+    # Weights for each luck level 0-10:
+    tier_weights_by_luck = [
+        [0.80, 0.18, 0.02, 0.00, 0.00],  # luck 0
+        [0.70, 0.22, 0.07, 0.01, 0.00],  # luck 1
+        [0.60, 0.25, 0.12, 0.03, 0.00],  # luck 2
+        [0.50, 0.28, 0.17, 0.05, 0.00],  # luck 3
+        [0.40, 0.30, 0.20, 0.09, 0.01],  # luck 4
+        [0.32, 0.32, 0.22, 0.13, 0.01],  # luck 5
+        [0.25, 0.32, 0.24, 0.17, 0.02],  # luck 6
+        [0.18, 0.32, 0.25, 0.22, 0.03],  # luck 7
+        [0.12, 0.30, 0.26, 0.27, 0.05],  # luck 8
+        [0.07, 0.25, 0.27, 0.34, 0.07],  # luck 9
+        [0.03, 0.18, 0.28, 0.41, 0.10],  # luck 10
+    ]
+    idx = min(max(int(luck), 0), 10)
+    weights = tier_weights_by_luck[idx]
     return random.choices(EQUIPMENT_TIERS, weights)[0]
 
 # --- Equipment Classes ---
@@ -1339,7 +1361,7 @@ class Game:
                     if random.random() < 0.10:
                         eq_class = random.choice(Equipment.equipment_classes)
                         eq_level = 1  # You can scale this with room or enemy later
-                        eq_tier = random_tier()  # Assign a random tier
+                        eq_tier = random_tier(self.player.luck)  # Use player's luck for tier
                         found_items.append(eq_class(level=eq_level, tier=eq_tier))
                     if found_items:
                         self.announcements.loot_screen(found_items)
