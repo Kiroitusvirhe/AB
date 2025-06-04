@@ -183,6 +183,10 @@ class Fighter(Player):
         super().__init__(x)
         self.upgrade_stat("attack")
         self.skill_cooldown = 8.0  # seconds
+        # Give starting sword
+        sword = Sword(level=1, tier="Good")
+        self.equipment_items[0] = sword
+        self.equip(sword)
 
     def use_skill(self, enemies):
         if self.can_use_skill():
@@ -203,6 +207,10 @@ class Assassin(Player):
         self.upgrade_stat("attack_speed")  # +2 levels to attack speed
         self.upgrade_stat("dodge_chance")
         self.skill_cooldown = 6.0  # seconds
+        # Give starting boots
+        boots = Boots(level=1, tier="Good")
+        self.equipment_items[0] = boots
+        self.equip(boots)
 
     def use_skill(self, enemy):
         if self.can_use_skill():
@@ -228,7 +236,11 @@ class Paladin(Player):
         self.upgrade_stat("defence")
         self.upgrade_stat("max_hp")  # +5 HP
         self.skill_cooldown = 12.0  # seconds
-
+        # Give starting shield
+        shield = Shield(level=1, tier="Good")
+        self.equipment_items[0] = shield
+        self.equip(shield)
+        
     def use_skill(self):
         if self.can_use_skill():
             heal = max(1, int(self.max_hp * 0.10))
