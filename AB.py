@@ -620,6 +620,15 @@ class Renderer:
                 inv_box[row][col] = getattr(potion, "char", "?")
         # Convert back to strings
         inventory_box = ["".join(row) for row in inv_box]
+
+        # --- Equipment rendering logic ---
+        eq_box = [list(row) for row in equipment_box]
+        for idx, eq in enumerate(getattr(player, "equipment_items", [])):
+            if eq:
+                row, col = slot_positions[idx]
+                eq_box[row][col] = getattr(eq, "char", "?")
+        equipment_box = ["".join(row) for row in eq_box]
+
         for i in range(battle_log_height):
             inv = inventory_box[i] if i < len(inventory_box) else ''
             log = battle_log_lines[i] if i < len(battle_log_lines) else ''
