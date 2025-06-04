@@ -209,8 +209,8 @@ class Potion(Item):
         pass  # To be overridden
 
 class HealingPotion(Potion):
-    """Base class for healing potions."""
     heal_percent = 0.0  # Override in subclasses
+    potion_classes = []  # Will be filled after all subclasses are defined
 
     def __init__(self, name=None):
         if name is None:
@@ -223,20 +223,94 @@ class HealingPotion(Potion):
         return f"{player.char} uses {self.name} and heals {heal_amount} HP!"
 
 class SmallHealingPotion(HealingPotion):
+    char = '!'
     heal_percent = 0.25
     def __init__(self):
-        super().__init__("Small Health Potion")
+        super().__init__("a small health potion")
 
 class MediumHealingPotion(HealingPotion):
+    char = '%'
     heal_percent = 0.5
     def __init__(self):
-        super().__init__("Medium Health Potion")
+        super().__init__("a medium health potion")
 
 class MaxHealingPotion(HealingPotion):
+    char = '&'
     heal_percent = 1.0
     def __init__(self):
-        super().__init__("Max Health Potion")
+        super().__init__("a max health potion")
 
+class StatPotion(Potion):
+    def __init__(self, name, stat):
+        super().__init__(name)
+        self.stat = stat
+
+    def use(self, player):
+        # Mark the stat to be boosted for the next battle
+        if not hasattr(player, 'stat_boosts'):
+            player.stat_boosts = {}
+        stat_value = getattr(player, self.stat)
+        if stat_value == 0:
+            player.stat_boosts[self.stat] = "+1"
+            stat_name = self.stat.replace('_', ' ').title()
+            return f"{player.char} uses {self.name}! {stat_name} +1 next battle!"
+        else:
+            player.stat_boosts[self.stat] = "double"
+            stat_name = self.stat.replace('_', ' ').title()
+            return f"{player.char} uses {self.name}! {stat_name} x2 next battle!"
+
+class AttackPotion(StatPotion):
+    char = 'A'
+    def __init__(self):
+        super().__init__("an attack potion", "attack")
+
+class DefencePotion(StatPotion):
+    char = 'D'
+    def __init__(self):
+        super().__init__("a defence potion", "defence")
+
+class AttackSpeedPotion(StatPotion):
+    char = 'S'
+    def __init__(self):
+        super().__init__("an attack speed potion", "attack_speed")
+
+class CritChancePotion(StatPotion):
+    char = 'C'
+    def __init__(self):
+        super().__init__("a crit chance potion", "crit_chance")
+
+class CritDamagePotion(StatPotion):
+    char = 'G'
+    def __init__(self):
+        super().__init__("a crit damage potion", "crit_damage")
+
+class ThornPotion(StatPotion):
+    char = 'T'
+    def __init__(self):
+        super().__init__("a thorn potion", "thorn_damage")
+
+class LifestealPotion(StatPotion):
+    char = 'L'
+    def __init__(self):
+        super().__init__("a lifesteal potion", "lifesteal")
+
+class DodgePotion(StatPotion):
+    char = 'V'
+    def __init__(self):
+        super().__init__("a dodge potion", "dodge_chance")
+
+class RegenPotion(StatPotion):
+    char = 'R'
+    def __init__(self):
+        super().__init__("a regen potion", "health_regen")
+
+# Register potion classes after all are defined
+HealingPotion.potion_classes = [
+    SmallHealingPotion, MediumHealingPotion, MaxHealingPotion,
+    AttackPotion, DefencePotion, AttackSpeedPotion,
+    CritChancePotion, CritDamagePotion, ThornPotion,
+    LifestealPotion, DodgePotion, RegenPotion,
+]
 # --- Room and UI Classes ---
 class Room:
     """Represents the game area."""
@@ -782,6 +856,17 @@ class Battle:
         # For future: support multiple enemies
         enemies = [enemy]
 
+        # --- Apply stat boosts ---
+        original_stats = {}
+        if hasattr(player, 'stat_boosts'):
+            for stat, boost_type in player.stat_boosts.items():
+                original_stats[stat] = getattr(player, stat)
+                if boost_type == "double":
+                    setattr(player, stat, getattr(player, stat) * 2)
+                elif boost_type == "+1":
+                    setattr(player, stat, getattr(player, stat) + 1)
+            player.stat_boosts.clear()
+
         while player.hp > 0 and enemy.hp > 0 and running_flag():
             acted = False
 
@@ -849,7 +934,8 @@ class Battle:
                 # --- Loot drop: 10% chance for potion ---
                 found_items = []
                 if random.random() < 0.10:
-                    found_items.append(SmallHealingPotion())
+                    potion_class = random.choice(HealingPotion.potion_classes)
+                    found_items.append(potion_class())
                 # (Add equipment drops here in the future)
                 if found_items:
                     self.announcements.loot_screen(found_items)
@@ -863,6 +949,10 @@ class Battle:
                         else:
                             # Inventory full, just skip for now (or add prompt later)
                             pass
+                # --- Restore original stats before ending battle ---
+                if original_stats:
+                    for stat, value in original_stats.items():
+                        setattr(player, stat, value)
                 return "win"  # <--- ADD THIS LINE
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
