@@ -239,50 +239,56 @@ class Paladin(Player):
 # --- Enemy Classes ---
 class Enemy(Entity):
     """Enemy character with different types."""
-    def __init__(self, x, enemy_type='basic'):
-        # --- Updated enemy stats ---
+    def __init__(self, x, enemy_type='basic', room_number=1):
+        # Scaling factors
+        hp_scale = 1 + 0.15 * (room_number - 1)
+        atk_scale = 1 + 0.10 * (room_number - 1)
+        spd_scale = 1 + 0.07 * (room_number - 1)
+        def_scale = 1 + 0.10 * (room_number - 1)
+        dodge_scale = 1 + 0.05 * (room_number - 1)
+
         if enemy_type == 'basic':
             char = 'E'
             super().__init__(x, char)
-            self.hp = 8
-            self.max_hp = 8
-            self.attack = 2
-            self.attack_speed = 1.0
+            self.hp = int(8 * hp_scale)
+            self.max_hp = self.hp
+            self.attack = int(2 * atk_scale)
+            self.attack_speed = 1.0 * spd_scale
             self.crit_chance = 0.1
             self.crit_damage = 2.0
-            self.defence = 0
+            self.defence = int(0 * def_scale)
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
-            self.dodge_chance = 0.05
+            self.dodge_chance = min(0.05 * dodge_scale, 0.5)
         elif enemy_type == 'speedy':
             char = 'S'
             super().__init__(x, char)
-            self.hp = 5
-            self.max_hp = 5
-            self.attack = 1
-            self.attack_speed = 1.5
+            self.hp = int(5 * (1 + 0.07 * (room_number - 1)))
+            self.max_hp = self.hp
+            self.attack = int(1 * (1 + 0.07 * (room_number - 1)))
+            self.attack_speed = 1.5 * spd_scale  # Speed scales more
             self.crit_chance = 0.1
             self.crit_damage = 2.0
-            self.defence = 0
+            self.defence = int(0 * def_scale)
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
-            self.dodge_chance = 0.15
+            self.dodge_chance = min(0.15 * dodge_scale, 0.7)  # Dodge scales more
         elif enemy_type == 'tough':
             char = 'O'
             super().__init__(x, char)
-            self.hp = 15
-            self.max_hp = 15
-            self.attack = 1
-            self.attack_speed = 0.5
+            self.hp = int(15 * hp_scale * 1.2)  # HP scales more
+            self.max_hp = self.hp
+            self.attack = int(1 * atk_scale)
+            self.attack_speed = 0.5 * (1 + 0.03 * (room_number - 1))  # Speed scales less
             self.crit_chance = 0.05
             self.crit_damage = 2.0
-            self.defence = 0
+            self.defence = int(0 + (room_number // 2))  # Defence increases every 2 rooms
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
-            self.dodge_chance = 0.02
+            self.dodge_chance = min(0.02 * dodge_scale, 0.2)
         else:
             char = '?'
             super().__init__(x, char)
@@ -1174,9 +1180,12 @@ class Battle:
                     else:
                         # Don't overheal, but keep lifesteal_pool for later
                         break
-                if healed > 0:
-                    battle_log = battle_log_lines if battle_log_lines is not None else []
-                    battle_log.append(f"{attacker.char} lifesteals {healed} HP!")
+                # Always log lifesteal, even if no HP was restored
+                if battle_log_lines is not None:
+                    if healed > 0:
+                        battle_log_lines.append(f"{attacker.char} lifesteals {healed} HP!")
+                    elif damage * attacker.lifesteal > 0:
+                        battle_log_lines.append(f"{attacker.char} lifesteals but is already at full HP!")
             else:
                 # For enemies, keep old logic if needed
                 heal = int(damage * attacker.lifesteal)
