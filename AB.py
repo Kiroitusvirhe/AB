@@ -70,7 +70,7 @@ class Player(Entity):
         elif stat == "lifesteal":
             self.lifesteal = min(1.0, self.lifesteal + 0.05)
         elif stat == "dodge_chance":
-            self.dodge_chance = min(1.0, self.dodge_chance + 0.05)
+            self.dodge_chance = min(0.7, self.dodge_chance + 0.05)
         elif stat == "max_hp":
             self.max_hp += 5
             self.hp += 5
@@ -141,6 +141,7 @@ class Player(Entity):
             self.lifesteal = max(0.0, self.lifesteal - 0.05)
         elif stat == "dodge_chance":
             self.dodge_chance = max(0.0, self.dodge_chance - 0.05)
+            self.dodge_chance = min(self.dodge_chance, 0.7)  # Ensure cap after downgrade
         elif stat == "max_hp":
             self.max_hp = max(1, self.max_hp - 5)
             self.hp = min(self.hp, self.max_hp)
@@ -260,7 +261,7 @@ class Enemy(Entity):
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
-            self.dodge_chance = min(0.05 * dodge_scale, 0.5)
+            self.dodge_chance = min(0.05 * dodge_scale, 0.7)
         elif enemy_type == 'speedy':
             char = 'S'
             super().__init__(x, char)
@@ -288,7 +289,7 @@ class Enemy(Entity):
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
-            self.dodge_chance = min(0.02 * dodge_scale, 0.2)
+            self.dodge_chance = min(0.02 * dodge_scale, 0.7)
         else:
             char = '?'
             super().__init__(x, char)
