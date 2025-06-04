@@ -1463,8 +1463,9 @@ class Game:
                         found_items.append(potion_class())
                     if random.random() < loot_chance:
                         eq_class = random.choice(Equipment.equipment_classes)
-                        eq_level = 1  # You can scale this with room or enemy later
-                        eq_tier = random_tier(self.player.luck)  # Use player's luck for tier
+                        max_eq_level = 1 + (self.current_room // 10)
+                        eq_level = random.randint(1, max_eq_level)
+                        eq_tier = random_tier(self.player.luck)
                         found_items.append(eq_class(level=eq_level, tier=eq_tier))
                     if found_items:
                         self.announcements.loot_screen(found_items)
