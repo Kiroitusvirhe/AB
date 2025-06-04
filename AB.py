@@ -41,7 +41,8 @@ class Player(Entity):
         self.equipment_items = [None, None, None, None]  # 4 equipment slots
         self.luck = 0  # <--- Add this line
         self.lifesteal_pool = 0.0  # <--- Add this line for cumulative lifesteal
-
+        self.gold = 0
+        
     def gain_xp(self, amount):
         leveled_up = False
         self.xp += amount
@@ -240,7 +241,7 @@ class Paladin(Player):
         shield = Shield(level=1, tier="Good")
         self.equipment_items[0] = shield
         self.equip(shield)
-        
+
     def use_skill(self):
         if self.can_use_skill():
             heal = max(1, int(self.max_hp * 0.10))
@@ -584,7 +585,7 @@ class UI:
         stats = [
             f"LVL: {player.level}",
             f"XP: {player.xp}/{player.xp_to_next}",
-            f"HP: {player.hp}/{player.max_hp:.0f}",
+            f"HP: {int(player.hp):.0f}/{player.max_hp:.0f}",
             f"ATK: {player.attack:.0f}",
             f"ATK SPD: {player.attack_speed:.1f}",
             f"CRIT%: {int(round(player.crit_chance * 100))}",
@@ -595,6 +596,7 @@ class UI:
             f"LIFESTEAL: {player.lifesteal:.2f}",
             f"DODGE%: {int(round(player.dodge_chance * 100))}",
             f"LUCK: {player.luck}",
+            f"GOLD: {player.gold}",
         ]
         stats += [''] * (game_height - len(stats))
         return stats
@@ -1480,6 +1482,12 @@ class Game:
                         eq_level = random.randint(1, max_eq_level)
                         eq_tier = random_tier(self.player.luck)
                         found_items.append(eq_class(level=eq_level, tier=eq_tier))
+                    
+                    # --- Gold reward ---
+                    if random.random() < 0.3:
+                        gold_earned = random.randint(1, 3)
+                        self.player.gold += gold_earned
+                        found_items.append(type("Gold", (), {"name": f"{gold_earned} gold"})())
                     if found_items:
                         self.announcements.loot_screen(found_items)
                         for item in found_items:
