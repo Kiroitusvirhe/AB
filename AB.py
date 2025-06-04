@@ -267,7 +267,7 @@ class Enemy(Entity):
             self.hp = int(5 * (1 + 0.07 * (room_number - 1)))
             self.max_hp = self.hp
             self.attack = int(1 * (1 + 0.07 * (room_number - 1)))
-            self.attack_speed = 1.5 * spd_scale  # Speed scales more
+            self.attack_speed = 1.3 * spd_scale  # Speed scales more
             self.crit_chance = 0.1
             self.crit_damage = 2.0
             self.defence = int(0 * def_scale)
@@ -278,13 +278,13 @@ class Enemy(Entity):
         elif enemy_type == 'tough':
             char = 'O'
             super().__init__(x, char)
-            self.hp = int(15 * hp_scale * 1.2)  # HP scales more
+            self.hp = int(13 * hp_scale * 1.15)  # HP scales more
             self.max_hp = self.hp
             self.attack = int(1 * atk_scale)
             self.attack_speed = 0.5 * (1 + 0.03 * (room_number - 1))  # Speed scales less
             self.crit_chance = 0.05
             self.crit_damage = 2.0
-            self.defence = int(0 + (room_number // 2))  # Defence increases every 2 rooms
+            self.defence = int(0 + (room_number // 4))  # Defence increases every 2 rooms
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
