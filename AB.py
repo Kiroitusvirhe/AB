@@ -404,8 +404,8 @@ class Equipment(Item):
         self.tier = tier  # Add tier attribute
 
     def display_name(self):
-        # Show tier in name, e.g. "Rare sword"
-        return f"{self.tier} {self.name}"
+        # Show level and tier in name, e.g. "lvl.1 Basic boots"
+        return f"lvl.{self.level} {self.tier.lower()} {self.name}"
 
 # Equipment subclasses for each stat
 
@@ -836,11 +836,11 @@ class Announcements:
         lines = ["Equipment slots full!"]
         for idx, eq in enumerate(player.equipment_items):
             if eq:
-                name = f"Lvl.{eq.level} {eq.display_name()}"
+                name = eq.display_name()
             else:
                 name = "(empty)"
             lines.append(f"{idx+1}. {name}")
-        new_name = f"Lvl.{new_item.level} {new_item.display_name()}"
+        new_name = new_item.display_name()
         lines.append(f"New: {new_name}")
         lines.append("Press 1-4 to replace, or SPACE to discard new item.")
         message = "\n".join(lines)
