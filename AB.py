@@ -25,6 +25,7 @@ class Entity:
         self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.05
+        self.luck = 0  # <--- Add this line
 
 class Player(Entity):
     """Player character."""
@@ -38,6 +39,7 @@ class Player(Entity):
         self.skill_cooldown_timer = 0.0
         self.potions = [None, None, None, None]  # 4 potion slots
         self.equipment_items = [None, None, None, None]  # 4 equipment slots
+        self.luck = 0  # <--- Add this line
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -71,6 +73,8 @@ class Player(Entity):
         elif stat == "max_hp":
             self.max_hp += 5
             self.hp += 5
+        elif stat == "luck":
+            self.luck = min(10, self.luck + 1)  # <--- Add this line
 
     def reset_regen_timer(self):
         self.regen_timer = 0.0
@@ -130,6 +134,8 @@ class Player(Entity):
         elif stat == "max_hp":
             self.max_hp = max(1, self.max_hp - 5)
             self.hp = min(self.hp, self.max_hp)
+        elif stat == "luck":
+            self.luck = max(0, self.luck - 1)  # <--- Add this line
 
     def unequip(self, item):
         stat_map = {
@@ -714,6 +720,9 @@ class Announcements:
             ("dodge_chance", "Dodge +5%"),
             ("max_hp", "Max HP +5"),
         ]
+        # Add luck if not maxed
+        if getattr(player, "luck", 0) < 10:
+            stat_options.append(("luck", "Luck +1"))
         choices = random.sample(stat_options, 3)
         selected = 0
 
