@@ -311,6 +311,68 @@ HealingPotion.potion_classes = [
     CritChancePotion, CritDamagePotion, ThornPotion,
     LifestealPotion, DodgePotion, RegenPotion,
 ]
+
+# --- Equipment Classes ---
+class Equipment(Item):
+    """Base class for all equipment items."""
+    def __init__(self, name, level=1):
+        super().__init__(name)
+        self.level = level
+
+# Equipment subclasses for each stat
+
+class Sword(Equipment):
+    char = '/'
+    def __init__(self, level=1):
+        super().__init__("a sword", level)  # Attack
+
+class Shield(Equipment):
+    char = ']'
+    def __init__(self, level=1):
+        super().__init__("a shield", level)  # Defence
+
+class Armor(Equipment):
+    char = 'U'
+    def __init__(self, level=1):
+        super().__init__("an armor", level)  # Max HP
+
+class Fangs(Equipment):
+    char = 'f'
+    def __init__(self, level=1):
+        super().__init__("fangs", level)  # Lifesteal
+
+class Boots(Equipment):
+    char = 'b'
+    def __init__(self, level=1):
+        super().__init__("boots", level)  # Dodge chance
+
+class Amulet(Equipment):
+    char = 'a'
+    def __init__(self, level=1):
+        super().__init__("an amulet", level)  # Crit chance
+
+class Gem(Equipment):
+    char = '*'
+    def __init__(self, level=1):
+        super().__init__("a gem", level)  # Crit damage
+
+class Thorns(Equipment):
+    char = 't'
+    def __init__(self, level=1):
+        super().__init__("thorns", level)  # Thorn damage
+
+class Ring(Equipment):
+    char = 'r'
+    def __init__(self, level=1):
+        super().__init__("a ring", level)  # Health regen
+
+class Gloves(Equipment):
+    char = 'g'
+    def __init__(self, level=1):
+        super().__init__("gloves", level)  # Attack speed
+
+# Add more as needed for other stats
+
 # --- Room and UI Classes ---
 class Room:
     """Represents the game area."""
