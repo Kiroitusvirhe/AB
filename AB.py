@@ -241,11 +241,11 @@ class Enemy(Entity):
     """Enemy character with different types."""
     def __init__(self, x, enemy_type='basic', room_number=1):
         # Scaling factors
-        hp_scale = 1 + 0.15 * (room_number - 1)
-        atk_scale = 1 + 0.10 * (room_number - 1)
-        spd_scale = 1 + 0.07 * (room_number - 1)
-        def_scale = 1 + 0.10 * (room_number - 1)
-        dodge_scale = 1 + 0.05 * (room_number - 1)
+        hp_scale = 1 + 0.03 * (room_number - 1)
+        atk_scale = 1 + 0.02 * (room_number - 1)
+        spd_scale = 1 + 0.012 * (room_number - 1)
+        def_scale = 1 + 0.02 * (room_number - 1)
+        dodge_scale = 1 + 0.01 * (room_number - 1)
 
         if enemy_type == 'basic':
             char = 'E'
@@ -579,7 +579,7 @@ class UI:
             f"DEF: {player.defence:.0f}",
             f"REGEN: {player.health_regen:.0f}",
             f"THORN: {player.thorn_damage:.0f}",
-            f"LIFESTEAL: {player.lifesteal:.0f}",
+            f"LIFESTEAL: {player.lifesteal:.2f}",
             f"DODGE%: {int(round(player.dodge_chance * 100))}",
             f"LUCK: {player.luck}",
         ]
