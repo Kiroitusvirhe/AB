@@ -387,64 +387,77 @@ HealingPotion.potion_classes = [
     LifestealPotion, DodgePotion, RegenPotion,
 ]
 
+# --- Equipment Tiers ---
+EQUIPMENT_TIERS = ["Basic", "Good", "Rare", "Awesome", "Legendary"]
+
+def random_tier():
+    # Weighted chance: Basic most common, Legendary rarest
+    weights = [0.5, 0.25, 0.15, 0.08, 0.02]
+    return random.choices(EQUIPMENT_TIERS, weights)[0]
+
 # --- Equipment Classes ---
 class Equipment(Item):
     """Base class for all equipment items."""
-    def __init__(self, name, level=1):
+    def __init__(self, name, level=1, tier="Basic"):
         super().__init__(name)
         self.level = level
+        self.tier = tier  # Add tier attribute
+
+    def display_name(self):
+        # Show tier in name, e.g. "Rare sword"
+        return f"{self.tier} {self.name}"
 
 # Equipment subclasses for each stat
 
 class Sword(Equipment):
     char = '/'
-    def __init__(self, level=1):
-        super().__init__("a sword", level)  # Attack
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("sword", level, tier)  # Attack
 
 class Shield(Equipment):
     char = ']'
-    def __init__(self, level=1):
-        super().__init__("a shield", level)  # Defence
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("shield", level, tier)  # Defence
 
 class Armor(Equipment):
     char = 'U'
-    def __init__(self, level=1):
-        super().__init__("an armor", level)  # Max HP
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("armor", level, tier)  # Max HP
 
 class Fangs(Equipment):
     char = 'f'
-    def __init__(self, level=1):
-        super().__init__("fangs", level)  # Lifesteal
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("fangs", level, tier)  # Lifesteal
 
 class Boots(Equipment):
     char = 'b'
-    def __init__(self, level=1):
-        super().__init__("boots", level)  # Dodge chance
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("boots", level, tier)  # Dodge chance
 
 class Amulet(Equipment):
     char = 'a'
-    def __init__(self, level=1):
-        super().__init__("an amulet", level)  # Crit chance
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("amulet", level, tier)  # Crit chance
 
 class Gem(Equipment):
     char = '*'
-    def __init__(self, level=1):
-        super().__init__("a gem", level)  # Crit damage
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("gem", level, tier)  # Crit damage
 
 class Thorns(Equipment):
     char = 't'
-    def __init__(self, level=1):
-        super().__init__("thorns", level)  # Thorn damage
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("thorns", level, tier)  # Thorn damage
 
 class Ring(Equipment):
     char = 'r'
-    def __init__(self, level=1):
-        super().__init__("a ring", level)  # Health regen
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("ring", level, tier)  # Health regen
 
 class Gloves(Equipment):
     char = 'g'
-    def __init__(self, level=1):
-        super().__init__("gloves", level)  # Attack speed
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("gloves", level, tier)  # Attack speed
 
 Equipment.equipment_classes = [
     Sword, Shield, Armor, Fangs, Boots, Amulet, Gem, Thorns, Ring, Gloves
@@ -805,7 +818,12 @@ class Announcements:
         # found_items: list of Item objects
         if not found_items:
             return
-        names = [item.name for item in found_items]
+        # Use display_name for equipment, name for others
+        def item_display(item):
+            if isinstance(item, Equipment):
+                return item.display_name()
+            return item.name
+        names = [item_display(item) for item in found_items]
         if len(names) == 1:
             msg = f"You found {names[0]}!"
         elif len(names) == 2:
@@ -818,11 +836,11 @@ class Announcements:
         lines = ["Equipment slots full!"]
         for idx, eq in enumerate(player.equipment_items):
             if eq:
-                name = f"Lvl.{eq.level} {eq.name[2:] if eq.name.startswith('a ') or eq.name.startswith('an ') else eq.name}"
+                name = f"Lvl.{eq.level} {eq.display_name()}"
             else:
                 name = "(empty)"
             lines.append(f"{idx+1}. {name}")
-        new_name = f"Lvl.{new_item.level} {new_item.name[2:] if new_item.name.startswith('a ') or new_item.name.startswith('an ') else new_item.name}"
+        new_name = f"Lvl.{new_item.level} {new_item.display_name()}"
         lines.append(f"New: {new_name}")
         lines.append("Press 1-4 to replace, or SPACE to discard new item.")
         message = "\n".join(lines)
@@ -1321,7 +1339,8 @@ class Game:
                     if random.random() < 0.10:
                         eq_class = random.choice(Equipment.equipment_classes)
                         eq_level = 1  # You can scale this with room or enemy later
-                        found_items.append(eq_class(level=eq_level))
+                        eq_tier = random_tier()  # Assign a random tier
+                        found_items.append(eq_class(level=eq_level, tier=eq_tier))
                     if found_items:
                         self.announcements.loot_screen(found_items)
                         for item in found_items:
