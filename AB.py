@@ -55,9 +55,9 @@ class Player(Entity):
 
     def upgrade_stat(self, stat):
         if stat == "attack":
-            self.attack += 1
+            self.attack += 1.2
         elif stat == "attack_speed":
-            self.attack_speed += 0.1
+            self.attack_speed += 0.12
         elif stat == "crit_chance":
             self.crit_chance = min(1.0, self.crit_chance + 0.05)
         elif stat == "crit_damage":
@@ -65,7 +65,7 @@ class Player(Entity):
         elif stat == "defence":
             self.defence += 1
         elif stat == "health_regen":
-            self.health_regen += 1
+            self.health_regen += 2
         elif stat == "thorn_damage":
             self.thorn_damage += 1
         elif stat == "lifesteal":
@@ -73,10 +73,10 @@ class Player(Entity):
         elif stat == "dodge_chance":
             self.dodge_chance = min(0.7, self.dodge_chance + 0.05)
         elif stat == "max_hp":
-            self.max_hp += 5
-            self.hp += 5
+            self.max_hp += 6
+            self.hp += 6
         elif stat == "luck":
-            self.luck = min(10, self.luck + 1)  # <--- Add this line
+            self.luck = min(10, self.luck + 1)
 
     def reset_regen_timer(self):
         self.regen_timer = 0.0
@@ -255,10 +255,10 @@ class Enemy(Entity):
     """Enemy character with different types."""
     def __init__(self, x, enemy_type='basic', room_number=1):
         # Scaling factors
-        hp_scale = 1 + 0.03 * (room_number - 1)
-        atk_scale = 1 + 0.02 * (room_number - 1)
-        spd_scale = 1 + 0.012 * (room_number - 1)
-        def_scale = 1 + 0.02 * (room_number - 1)
+        hp_scale = 1 + 0.02 * (room_number - 1)
+        atk_scale = 1 + 0.015 * (room_number - 1)
+        spd_scale = 1 + 0.01 * (room_number - 1)
+        def_scale = 1 + 0.015 * (room_number - 1)
         dodge_scale = 1 + 0.01 * (room_number - 1)
 
         if enemy_type == 'basic':
@@ -281,24 +281,24 @@ class Enemy(Entity):
             self.hp = int(5 * (1 + 0.07 * (room_number - 1)))
             self.max_hp = self.hp
             self.attack = int(1 * (1 + 0.07 * (room_number - 1)))
-            self.attack_speed = 1.3 * spd_scale  # Speed scales more
+            self.attack_speed = 1.12 * spd_scale  # Speed scales more
             self.crit_chance = 0.1
             self.crit_damage = 2.0
             self.defence = int(0 * def_scale)
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
-            self.dodge_chance = min(0.15 * dodge_scale, 0.7)  # Dodge scales more
+            self.dodge_chance = min(0.12 * dodge_scale, 0.7)  # Dodge scales more
         elif enemy_type == 'tough':
             char = 'O'
             super().__init__(x, char)
-            self.hp = int(13 * hp_scale * 1.15)  # HP scales more
+            self.hp = int(13 * hp_scale * 1.12)  # HP scales more
             self.max_hp = self.hp
             self.attack = int(1 * atk_scale)
             self.attack_speed = 0.5 * (1 + 0.03 * (room_number - 1))  # Speed scales less
             self.crit_chance = 0.05
             self.crit_damage = 2.0
-            self.defence = int(0 + (room_number // 4))  # Defence increases every 2 rooms
+            self.defence = int(0 + (room_number // 5))  # Defence increases every 2 rooms
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
@@ -607,7 +607,7 @@ class UI:
         else:
             stats = [
                 f"ENEMY: {enemy.char}",
-                f"HP: {enemy.hp}/{enemy.max_hp}",
+                f"HP: {enemy.hp:.0f}/{enemy.max_hp:.0f}",
                 f"ATK: {enemy.attack}",
                 f"ATK SPD: {enemy.attack_speed:.1f}",
                 f"CRIT%: {int(round(enemy.crit_chance * 100))}",
@@ -1209,8 +1209,8 @@ class Battle:
         thorn_msg = ""
         if defender.thorn_damage > 0:
             attacker.hp -= defender.thorn_damage
-            thorn_msg = f" {attacker.char} takes {defender.thorn_damage} thorn damage!"
-        msg = f"{attacker.char} hits {defender.char} for {damage} damage"
+            thorn_msg = f" {attacker.char} takes {defender.thorn_damage:.0f} thorn damage!"
+        msg = f"{attacker.char} hits {defender.char} for {damage:.0f} damage"
         if 'crit' in locals() and crit:
             msg += " (CRIT!)"
         msg += "!" + thorn_msg
@@ -1451,12 +1451,14 @@ class Game:
 
             while self.running:
                 self.current_room += 1
-                # SHOP LOGIC
-                if random.random() < self.shop_probability:
-                    self.show_shop()
-                    self.shop_probability = 0.0
-                else:
-                    self.shop_probability += 0.05
+
+                # --- SHOP LOGIC: Only after room 5 ---
+                if self.current_room > 5:
+                    if random.random() < self.shop_probability:
+                        self.show_shop()
+                        self.shop_probability = 0.0
+                    else:
+                        self.shop_probability += 0.05
 
                 self.reset_player_position()
                 self.spawn_enemies()  # <--- changed from spawn_enemy()
@@ -1493,7 +1495,8 @@ class Game:
                         found_items.append(eq_class(level=eq_level, tier=eq_tier))
                     
                     # --- Gold reward ---
-                    if random.random() < 0.3:
+                    gold_chance = 0.35 + 0.01 * self.player.luck  # 30% base +1% per luck
+                    if random.random() < gold_chance:
                         gold_earned = random.randint(1, 3)
                         self.player.gold += gold_earned
                         found_items.append(type("Gold", (), {"name": f"{gold_earned} gold"})())
