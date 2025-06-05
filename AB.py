@@ -76,7 +76,7 @@ class ThornBurstSkill(Skill):
         for enemy in enemies:
             enemy.hp -= player.thorn_damage
         self.cooldown_timer = 0.0
-        return f"THORN BURST! All enemies take {player.thorn_damage} damage!"
+        return f"THORN BURST! {player.thorn_damage:.0f} dmg to all!"
 
 class LuckyStrikeSkill(Skill):
     def __init__(self):
@@ -85,7 +85,7 @@ class LuckyStrikeSkill(Skill):
         damage = max(1, player.attack - enemy.defence) + player.luck
         enemy.hp -= damage
         self.cooldown_timer = 0.0
-        return f"LUCKY STRIKE! {enemy.char} takes {damage} damage!"
+        return f"LUCKY STRIKE! {enemy.char} takes {damage:.0f} dmg!"
 
 class RegenWaveSkill(Skill):
     def __init__(self):
@@ -94,7 +94,7 @@ class RegenWaveSkill(Skill):
         heal = max(1, player.health_regen * 2)
         player.hp = min(player.max_hp, player.hp + heal)
         self.cooldown_timer = 0.0
-        return f"REGEN WAVE! You heal {heal} HP!"
+        return f"REGEN WAVE! Heal {heal:.0f} HP!"
 
 class CritShieldSkill(Skill):
     def __init__(self):
@@ -104,9 +104,9 @@ class CritShieldSkill(Skill):
             shield = int(player.max_hp * player.crit_chance)
             player.timed_effects["crit_shield"] = {"value": shield, "timer": 3.0}
             self.cooldown_timer = 0.0
-            return f"CRIT SHIELD! You gain a shield of {shield} HP for 3 seconds!"
+            return f"CRIT SHIELD! Shield {shield:.0f} HP (3s)!"
         else:
-            return "CRIT SHIELD is already active!"
+            return "CRIT SHIELD is active!"
 
 class LifestealNovaSkill(Skill):
     def __init__(self):
@@ -119,7 +119,7 @@ class LifestealNovaSkill(Skill):
             total += damage
         player.hp = min(player.max_hp, player.hp + total)
         self.cooldown_timer = 0.0
-        return f"LIFESTEAL NOVA! All enemies take {player.attack} damage, you heal {total} HP!"
+        return f"LIFESTEAL NOVA! {player.attack:.0f} dmg to all, heal {total:.0f}!"
 
 SKILL_POOL = [
     ThornBurstSkill,
@@ -1486,8 +1486,9 @@ class Battle:
 
                     if skill_log:
                         if hasattr(self, 'animations') and self.animations:
+                            anim_name = skill_name.upper() + "!"
                             self.animations.skill_effect(
-                                skill_name, player,
+                                anim_name, player,
                                 boss_info_lines=self.ui.get_enemy_stats_lines(living_enemies[0] if living_enemies else None, self.room.height),
                                 battle_log_lines=battle_log[-6:]
                             )
@@ -1558,7 +1559,7 @@ class Battle:
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
                     self.announcements.level_up_screen(player)
                     # --- Skill roll on level up (after stat upgrade, before loot) ---
-                    if random.random() < 0.35:  # 40% chance
+                    if random.random() < 0.3:  # 40% chance
                         owned_types = {type(skill) for skill in player.skills}
                         available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
                         if available_skills:
