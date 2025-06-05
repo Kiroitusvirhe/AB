@@ -167,6 +167,64 @@ class JackpotSkill(Skill):
         self.cooldown_timer = 0.0
         return f"JACKPOT! You gain {gold} gold!"
 
+class GambleSkill(Skill):
+    def __init__(self):
+        super().__init__("Gamble", "50%: gain 10 gold, 50%: lose 5 HP.", cooldown=7.0)
+    def use(self, player):
+        if random.random() < 0.5:
+            player.gold += 10
+            result = "win 10 gold!"
+        else:
+            player.hp = max(1, player.hp - 5)
+            result = "lose 5 HP!"
+        self.cooldown_timer = 0.0
+        return f"GAMBLE! You {result}"
+
+class GlassCannonSkill(Skill):
+    def __init__(self):
+        super().__init__("Glass Cannon", "+5 atk, -10 max HP (permanent).", cooldown=0.0)
+    def use(self, player):
+        player.attack += 5
+        player.max_hp = max(1, player.max_hp - 10)
+        player.hp = min(player.hp, player.max_hp)
+        self.cooldown_timer = 0.0
+        return "GLASS CANNON! +5 atk, -10 max HP!"
+
+class ClumsySwingSkill(Skill):
+    def __init__(self):
+        super().__init__("Clumsy Swing", "2x dmg, 30% chance to miss.", cooldown=8.0)
+    def use(self, player, enemy):
+        if random.random() < 0.7:
+            self.cooldown_timer = 0.0
+            return "CLUMSY SWING! You miss!"
+        damage = int(max(1, player.attack * 2 - enemy.defence))
+        enemy.hp -= damage
+        self.cooldown_timer = 0.0
+        return f"CLUMSY SWING! {enemy.char} takes {damage:.0f} dmg!"
+
+class UnstablePowerSkill(Skill):
+    def __init__(self):
+        super().__init__("Unstable Power", "2x atk (1 turn), then 0.5x atk (2 turns).", cooldown=10.0)
+    def use(self, player):
+        if "unstable_power" not in player.timed_effects:
+            player.attack *= 2
+            player.timed_effects["unstable_power"] = {"stage": 1, "timer": 1.0}
+            self.cooldown_timer = 0.0
+            return "UNSTABLE POWER! 2x atk!"
+        else:
+            return "UNSTABLE POWER already active!"
+
+class InvincibleSkill(Skill):
+    def __init__(self):
+        super().__init__("Invincible", "No damage taken for 2s.", cooldown=12.0)
+    def use(self, player):
+        if "invincible" not in player.timed_effects:
+            player.timed_effects["invincible"] = {"timer": 2.0}
+            self.cooldown_timer = 0.0
+            return "INVINCIBLE! No damage for 2s!"
+        else:
+            return "INVINCIBLE already active!"
+
 SKILL_POOL = [
     ThornBurstSkill,
     LuckyStrikeSkill,
@@ -177,7 +235,12 @@ SKILL_POOL = [
     GoldRushSkill,
     GuaranteedCritSkill,
     AdrenalineRushSkill,
-    JackpotSkill, 
+    JackpotSkill,
+    GambleSkill,
+    GlassCannonSkill,
+    ClumsySwingSkill,
+    UnstablePowerSkill,
+    InvincibleSkill,
     # Add more pool skills here as you create them
 ]    
     
@@ -460,14 +523,14 @@ class RegenBoss(BossEnemy):
     def __init__(self, x, room_number=1):
         super().__init__(x, name="Regen Boss", room_number=room_number)
         self.char = 'R'
-        self.hp = int(90 + 8 * room_number)  # Lowered HP scaling a bit
+        self.hp = int(60 + 4 * room_number)  # Lowered HP scaling
         self.max_hp = self.hp
-        self.attack = 3 + room_number // 8   # Lowered attack
+        self.attack = 2 + room_number // 12   # Lowered attack
         self.attack_speed = 0.8
         self.crit_chance = 0.12
         self.crit_damage = 2.0
-        self.defence = 2 + room_number // 15  # Lowered defence
-        self.health_regen = 6 + room_number // 4  # Still high regen!
+        self.defence = 2 + room_number // 15
+        self.health_regen = 6 + room_number // 4
         self.thorn_damage = 1
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
@@ -477,16 +540,16 @@ class LifestealBoss(BossEnemy):
     def __init__(self, x, room_number=1):
         super().__init__(x, name="Lifesteal Boss", room_number=room_number)
         self.char = 'L'
-        self.hp = int(80 + 8 * room_number)  # Lowered HP scaling a bit
+        self.hp = int(55 + 4 * room_number)  # Lowered HP scaling
         self.max_hp = self.hp
-        self.attack = 4 + room_number // 7   # Lowered attack
+        self.attack = 2 + room_number // 10   # Lowered attack
         self.attack_speed = 0.9
         self.crit_chance = 0.10
         self.crit_damage = 2.0
-        self.defence = 1 + room_number // 18  # Lowered defence
+        self.defence = 1 + room_number // 18
         self.health_regen = 1
         self.thorn_damage = 1
-        self.lifesteal = 0.18  # Still high lifesteal!
+        self.lifesteal = 0.18
         self.dodge_chance = 0.08
 
 class FinalBoss(BossEnemy):
@@ -1463,6 +1526,11 @@ class Battle:
             else:
                 damage -= shield
                 del defender.timed_effects["crit_shield"]
+        # --- Invincible logic ---
+        if isinstance(defender, Player) and "invincible" in defender.timed_effects:
+            messages.append(f"{defender.char} is INVINCIBLE and takes no damage!")
+            return messages
+
         defender.hp -= damage
         thorn_msg = ""
         if defender.thorn_damage > 0:
@@ -1542,6 +1610,26 @@ class Battle:
                         skill_log = skill.use(player)
                     elif isinstance(skill, LifestealNovaSkill):
                         skill_log = skill.use(player, living_enemies)
+                    elif isinstance(skill, InvincibleSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, GoldRushSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, GuaranteedCritSkill):
+                        if living_enemies:
+                            skill_log = skill.use(player, random.choice(living_enemies))
+                    elif isinstance(skill, AdrenalineRushSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, JackpotSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, GambleSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, GlassCannonSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, ClumsySwingSkill):
+                        if living_enemies:
+                            skill_log = skill.use(player, random.choice(living_enemies))
+                    elif isinstance(skill, UnstablePowerSkill):
+                        skill_log = skill.use(player)
                     # Add more skills here as needed
 
                     if skill_log:
