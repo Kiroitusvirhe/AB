@@ -14,6 +14,7 @@ class Skill:
         self.name = name
         self.description = description
         self.cooldown = cooldown
+        self.cooldown_timer = 0.0
 
     def use(self, player, *args, **kwargs):
         """Override in subclasses. Should return a log string or None."""
@@ -1412,6 +1413,10 @@ class Battle:
 
             # --- SKILL USAGE (automatic) ---
             player.update_skill_timer(time_step)
+
+            for skill in player.skills:
+                skill.cooldown_timer += time_step
+
             # --- Timed effects update (add this here) ---
             to_remove = []
             for effect, data in player.timed_effects.items():
@@ -1424,28 +1429,41 @@ class Battle:
             skill_log = None
             skill_name = None
             living_enemies = [e for e in enemies if e.hp > 0]
-            if player.skills and player.can_use_skill():
-                skill = player.skills[0]
-                # Use correct arguments for each skill
-                if isinstance(skill, BigSlashSkill):
-                    skill_log = skill.use(player, living_enemies)
+            for skill in player.skills:
+                # Check if the skill is ready
+                if skill.cooldown_timer >= skill.cooldown:
+                    skill_log = None
                     skill_name = skill.name
-                elif isinstance(skill, DoubleAttackSkill):
-                    if living_enemies:
-                        skill_log = skill.use(player, random.choice(living_enemies))
-                        skill_name = skill.name
-                elif isinstance(skill, BlessingLightSkill):
-                    skill_log = skill.use(player)
-                    skill_name = skill.name
-            if skill_log:
-                if hasattr(self, 'animations') and self.animations and skill_name:
-                    self.animations.skill_effect(
-                        skill_name, player,
-                        boss_info_lines=self.ui.get_enemy_stats_lines(living_enemies[0] if living_enemies else None, self.room.height),
-                        battle_log_lines=battle_log[-6:]
-                    )
-                battle_log.append(skill_log)
-                acted = True
+                    # Use correct arguments for each skill
+                    if isinstance(skill, BigSlashSkill):
+                        skill_log = skill.use(player, living_enemies)
+                    elif isinstance(skill, DoubleAttackSkill):
+                        if living_enemies:
+                            skill_log = skill.use(player, random.choice(living_enemies))
+                    elif isinstance(skill, BlessingLightSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, ThornBurstSkill):
+                        skill_log = skill.use(player, living_enemies)
+                    elif isinstance(skill, LuckyStrikeSkill):
+                        if living_enemies:
+                            skill_log = skill.use(player, random.choice(living_enemies))
+                    elif isinstance(skill, RegenWaveSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, CritShieldSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, LifestealNovaSkill):
+                        skill_log = skill.use(player, living_enemies)
+                    # Add more skills here as needed
+
+                    if skill_log:
+                        if hasattr(self, 'animations') and self.animations:
+                            self.animations.skill_effect(
+                                skill_name, player,
+                                boss_info_lines=self.ui.get_enemy_stats_lines(living_enemies[0] if living_enemies else None, self.room.height),
+                                battle_log_lines=battle_log[-6:]
+                            )
+                        battle_log.append(skill_log)
+                        acted = True
 
             # --- Player attacks a random living enemy ---
             if clock >= player_next_attack and living_enemies:
