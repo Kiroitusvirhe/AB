@@ -67,7 +67,69 @@ class BlessingLightSkill(Skill):
             player.skill_cooldown_timer = 0.0
             return f"Paladin uses BLESSING LIGHT! (+{heal:.0f} HP)"
         return None
+    
+class ThornBurstSkill(Skill):
+    def __init__(self):
+        super().__init__("Thorn Burst", "Deal thorn damage to all enemies equal to your thorn stat.", cooldown=7.0)
+    def use(self, player, enemies):
+        if player.can_use_skill():
+            for enemy in enemies:
+                enemy.hp -= player.thorn_damage
+            player.skill_cooldown_timer = 0.0
+            return f"THORN BURST! All enemies take {player.thorn_damage} damage!"
+        return None
 
+class LuckyStrikeSkill(Skill):
+    def __init__(self):
+        super().__init__("Lucky Strike", "Deal bonus damage equal to your luck stat.", cooldown=6.0)
+    def use(self, player, enemy):
+        if player.can_use_skill():
+            damage = max(1, player.attack - enemy.defence) + player.luck
+            enemy.hp -= damage
+            player.skill_cooldown_timer = 0.0
+            return f"LUCKY STRIKE! {enemy.char} takes {damage} damage!"
+        return None
+
+class RegenWaveSkill(Skill):
+    def __init__(self):
+        super().__init__("Regen Wave", "Heal yourself for 2x your regen stat.", cooldown=8.0)
+    def use(self, player):
+        if player.can_use_skill():
+            heal = max(1, player.health_regen * 2)
+            player.hp = min(player.max_hp, player.hp + heal)
+            player.skill_cooldown_timer = 0.0
+            return f"REGEN WAVE! You heal {heal} HP!"
+        return None
+
+class CritShieldSkill(Skill):
+    def __init__(self):
+        super().__init__("Crit Shield", "Gain a shield equal to your crit chance % of max HP for 3 seconds.", cooldown=10.0)
+    def use(self, player):
+        if player.can_use_skill() and "crit_shield" not in player.timed_effects:
+            shield = int(player.max_hp * player.crit_chance)
+            player.timed_effects["crit_shield"] = {"value": shield, "timer": 3.0}
+            player.skill_cooldown_timer = 0.0
+            return f"CRIT SHIELD! You gain a shield of {shield} HP for 3 seconds!"
+        elif "crit_shield" in player.timed_effects:
+            return "CRIT SHIELD is already active!"
+        return None
+
+class LifestealNovaSkill(Skill):
+    def __init__(self):
+        super().__init__("Lifesteal Nova", "Deal your attack damage to all enemies and heal for total damage dealt.", cooldown=9.0)
+    def use(self, player, enemies):
+        if player.can_use_skill():
+            total = 0
+            for enemy in enemies:
+                damage = max(1, player.attack - enemy.defence)
+                enemy.hp -= damage
+                total += damage
+            player.hp = min(player.max_hp, player.hp + total)
+            player.skill_cooldown_timer = 0.0
+            return f"LIFESTEAL NOVA! All enemies take {player.attack} damage, you heal {total} HP!"
+        return None
+    
+    
 # --- Entity Classes ---
 class Entity:
     """Base class for all entities (player, enemies)."""
@@ -103,6 +165,7 @@ class Player(Entity):
         self.lifesteal_pool = 0.0  # <--- Add this line for cumulative lifesteal
         self.gold = 0
         self.skills = []
+        self.timed_effects = {}  # e.g. {"crit_shield": {"value": 10, "timer": 3.0}}
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -1303,6 +1366,15 @@ class Battle:
                 # For enemies, keep old logic if needed
                 heal = int(damage * attacker.lifesteal)
                 attacker.hp = min(attacker.max_hp, attacker.hp + heal)
+        # --- Crit Shield logic ---
+        if isinstance(defender, Player) and "crit_shield" in defender.timed_effects:
+            shield = defender.timed_effects["crit_shield"]["value"]
+            if damage <= shield:
+                defender.timed_effects["crit_shield"]["value"] -= damage
+                damage = 0
+            else:
+                damage -= shield
+                del defender.timed_effects["crit_shield"]
         defender.hp -= damage
         thorn_msg = ""
         if defender.thorn_damage > 0:
@@ -1340,6 +1412,15 @@ class Battle:
 
             # --- SKILL USAGE (automatic) ---
             player.update_skill_timer(time_step)
+            # --- Timed effects update (add this here) ---
+            to_remove = []
+            for effect, data in player.timed_effects.items():
+                data["timer"] -= time_step
+                if data["timer"] <= 0:
+                    to_remove.append(effect)
+            for effect in to_remove:
+                del player.timed_effects[effect]
+
             skill_log = None
             skill_name = None
             living_enemies = [e for e in enemies if e.hp > 0]
