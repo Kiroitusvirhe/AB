@@ -581,7 +581,7 @@ class RegenBoss(BossEnemy):
     def __init__(self, x, room_number=1):
         super().__init__(x, name="Regen Boss", room_number=room_number)
         self.char = 'R'
-        self.hp = int(60 + 4 * room_number)  # Lowered HP scaling
+        self.hp = int(30 + 3 * room_number)  # Lowered HP scaling
         self.max_hp = self.hp
         self.attack = 2 + room_number // 12   # Lowered attack
         self.attack_speed = 0.8
@@ -589,7 +589,7 @@ class RegenBoss(BossEnemy):
         self.crit_damage = 2.0
         self.defence = 2 + room_number // 15
         self.health_regen = 6 + room_number // 4
-        self.thorn_damage = 1
+        self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
 
@@ -598,7 +598,7 @@ class LifestealBoss(BossEnemy):
     def __init__(self, x, room_number=1):
         super().__init__(x, name="Lifesteal Boss", room_number=room_number)
         self.char = 'L'
-        self.hp = int(55 + 4 * room_number)  # Lowered HP scaling
+        self.hp = int(35 + 3 * room_number)  # Lowered HP scaling
         self.max_hp = self.hp
         self.attack = 2 + room_number // 10   # Lowered attack
         self.attack_speed = 0.9
@@ -606,7 +606,7 @@ class LifestealBoss(BossEnemy):
         self.crit_damage = 2.0
         self.defence = 1 + room_number // 18
         self.health_regen = 1
-        self.thorn_damage = 1
+        self.thorn_damage = 0
         self.lifesteal = 0.18
         self.dodge_chance = 0.08
 
