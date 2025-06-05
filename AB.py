@@ -225,6 +225,54 @@ class InvincibleSkill(Skill):
         else:
             return "INVINCIBLE already active!"
 
+class IronWillSkill(Skill):
+    def __init__(self):
+        super().__init__("Iron Will", "+10 max HP (permanent).", cooldown=0.0)
+    def use(self, player):
+        player.max_hp += 10
+        player.hp += 10
+        self.cooldown_timer = 0.0
+        return "IRON WILL! +10 max HP!"
+
+class SharpenedMindSkill(Skill):
+    def __init__(self):
+        super().__init__("Sharpened Mind", "+1 attack (permanent).", cooldown=0.0)
+    def use(self, player):
+        player.attack += 1
+        self.cooldown_timer = 0.0
+        return "SHARPENED MIND! +1 attack!"
+
+class CowardsGraceSkill(Skill):
+    def __init__(self):
+        super().__init__("Coward's Grace", "+10% dodge, -5 max HP (permanent).", cooldown=0.0)
+    def use(self, player):
+        player.dodge_chance = min(0.7, player.dodge_chance + 0.10)
+        player.max_hp = max(1, player.max_hp - 5)
+        player.hp = min(player.hp, player.max_hp)
+        self.cooldown_timer = 0.0
+        return "COWARD'S GRACE! +10% dodge, -5 max HP!"
+
+class LeadFeetSkill(Skill):
+    def __init__(self):
+        super().__init__("Lead Feet", "+5 defence, -10% dodge (permanent).", cooldown=0.0)
+    def use(self, player):
+        player.defence += 5
+        player.dodge_chance = max(0.0, player.dodge_chance - 0.10)
+        self.cooldown_timer = 0.0
+        return "LEAD FEET! +5 def, -10% dodge!"
+
+class BloodPactSkill(Skill):
+    def __init__(self):
+        super().__init__("Blood Pact", "+2 attack, -10 max HP (permanent).", cooldown=0.0)
+    def use(self, player):
+        player.attack += 2
+        player.max_hp = max(1, player.max_hp - 10)
+        player.hp = min(player.hp, player.max_hp)
+        self.cooldown_timer = 0.0
+        return "BLOOD PACT! +2 atk, -10 max HP!"
+
+
+
 SKILL_POOL = [
     ThornBurstSkill,
     LuckyStrikeSkill,
@@ -241,6 +289,11 @@ SKILL_POOL = [
     ClumsySwingSkill,
     UnstablePowerSkill,
     InvincibleSkill,
+    IronWillSkill,
+    SharpenedMindSkill,
+    CowardsGraceSkill,
+    LeadFeetSkill,
+    BloodPactSkill,
     # Add more pool skills here as you create them
 ]    
     
