@@ -71,64 +71,55 @@ class BlessingLightSkill(Skill):
     
 class ThornBurstSkill(Skill):
     def __init__(self):
-        super().__init__("Thorn Burst", "Deal thorn damage to all enemies equal to your thorn stat.", cooldown=7.0)
+        super().__init__("Thorn Burst", "Deal your thorn damage to all enemies.", cooldown=7.0)
     def use(self, player, enemies):
-        if player.can_use_skill():
-            for enemy in enemies:
-                enemy.hp -= player.thorn_damage
-            player.skill_cooldown_timer = 0.0
-            return f"THORN BURST! All enemies take {player.thorn_damage} damage!"
-        return None
+        for enemy in enemies:
+            enemy.hp -= player.thorn_damage
+        self.cooldown_timer = 0.0
+        return f"THORN BURST! All enemies take {player.thorn_damage} damage!"
 
 class LuckyStrikeSkill(Skill):
     def __init__(self):
-        super().__init__("Lucky Strike", "Deal bonus damage equal to your luck stat.", cooldown=6.0)
+        super().__init__("Lucky Strike", "Deal bonus damage equal to your luck.", cooldown=6.0)
     def use(self, player, enemy):
-        if player.can_use_skill():
-            damage = max(1, player.attack - enemy.defence) + player.luck
-            enemy.hp -= damage
-            player.skill_cooldown_timer = 0.0
-            return f"LUCKY STRIKE! {enemy.char} takes {damage} damage!"
-        return None
+        damage = max(1, player.attack - enemy.defence) + player.luck
+        enemy.hp -= damage
+        self.cooldown_timer = 0.0
+        return f"LUCKY STRIKE! {enemy.char} takes {damage} damage!"
 
 class RegenWaveSkill(Skill):
     def __init__(self):
-        super().__init__("Regen Wave", "Heal yourself for 2x your regen stat.", cooldown=8.0)
+        super().__init__("Regen Wave", "Heal for 2x your regen.", cooldown=8.0)
     def use(self, player):
-        if player.can_use_skill():
-            heal = max(1, player.health_regen * 2)
-            player.hp = min(player.max_hp, player.hp + heal)
-            player.skill_cooldown_timer = 0.0
-            return f"REGEN WAVE! You heal {heal} HP!"
-        return None
+        heal = max(1, player.health_regen * 2)
+        player.hp = min(player.max_hp, player.hp + heal)
+        self.cooldown_timer = 0.0
+        return f"REGEN WAVE! You heal {heal} HP!"
 
 class CritShieldSkill(Skill):
     def __init__(self):
-        super().__init__("Crit Shield", "Gain a shield equal to your crit chance % of max HP for 3 seconds.", cooldown=10.0)
+        super().__init__("Crit Shield", "Shield: crit% of max HP for 3s.", cooldown=10.0)
     def use(self, player):
-        if player.can_use_skill() and "crit_shield" not in player.timed_effects:
+        if "crit_shield" not in player.timed_effects:
             shield = int(player.max_hp * player.crit_chance)
             player.timed_effects["crit_shield"] = {"value": shield, "timer": 3.0}
-            player.skill_cooldown_timer = 0.0
+            self.cooldown_timer = 0.0
             return f"CRIT SHIELD! You gain a shield of {shield} HP for 3 seconds!"
-        elif "crit_shield" in player.timed_effects:
+        else:
             return "CRIT SHIELD is already active!"
-        return None
 
 class LifestealNovaSkill(Skill):
     def __init__(self):
-        super().__init__("Lifesteal Nova", "Deal your attack damage to all enemies and heal for total damage dealt.", cooldown=9.0)
+        super().__init__("Lifesteal Nova", "Hit all enemies, heal for total dealt.", cooldown=9.0)
     def use(self, player, enemies):
-        if player.can_use_skill():
-            total = 0
-            for enemy in enemies:
-                damage = max(1, player.attack - enemy.defence)
-                enemy.hp -= damage
-                total += damage
-            player.hp = min(player.max_hp, player.hp + total)
-            player.skill_cooldown_timer = 0.0
-            return f"LIFESTEAL NOVA! All enemies take {player.attack} damage, you heal {total} HP!"
-        return None
+        total = 0
+        for enemy in enemies:
+            damage = max(1, player.attack - enemy.defence)
+            enemy.hp -= damage
+            total += damage
+        player.hp = min(player.max_hp, player.hp + total)
+        self.cooldown_timer = 0.0
+        return f"LIFESTEAL NOVA! All enemies take {player.attack} damage, you heal {total} HP!"
 
 SKILL_POOL = [
     ThornBurstSkill,
@@ -1567,7 +1558,7 @@ class Battle:
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
                     self.announcements.level_up_screen(player)
                     # --- Skill roll on level up (after stat upgrade, before loot) ---
-                    if random.random() < 0.4:  # 40% chance
+                    if random.random() < 0.35:  # 40% chance
                         owned_types = {type(skill) for skill in player.skills}
                         available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
                         if available_skills:
@@ -1687,6 +1678,7 @@ class Game:
             else:
                 self.player = Paladin(x=PLAYER_START_X)
             self.reset_player_position()
+
             self.current_room = 1  # Reset room counter on new game
 
             # Give the player a Small Healing Potion for testing
