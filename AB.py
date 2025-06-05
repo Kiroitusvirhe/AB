@@ -112,6 +112,9 @@ class LifestealNovaSkill(Skill):
     def __init__(self):
         super().__init__("Lifesteal Nova", "Hit all enemies, heal for total dealt.", cooldown=9.0)
     def use(self, player, enemies):
+        if not enemies:
+            self.cooldown_timer = 0.0
+            return "LIFESTEAL NOVA! No enemies to hit."
         total = 0
         for enemy in enemies:
             damage = max(1, player.attack - enemy.defence)
@@ -171,7 +174,9 @@ class GambleSkill(Skill):
     def __init__(self):
         super().__init__("Gamble", "50%: gain 10 gold, 50%: lose 5 HP.", cooldown=7.0)
     def use(self, player):
-        if random.random() < 0.5:
+        # Each luck point gives +3% win chance (capped at 80%)
+        win_chance = min(0.5 + 0.03 * player.luck, 0.8)
+        if random.random() < win_chance:
             player.gold += 10
             result = "win 10 gold!"
         else:
@@ -1114,7 +1119,7 @@ class Announcements:
         self.input_handler = input_handler
         self.current_room = 1  # Will be set by Game
 
-    def wait_for_space(self, message, enemy=None, show_player=True, room_number=None):
+    def wait_for_space(self, message, enemy=None, show_player=True, room_number=None, battle_log_lines=None):
         self.input_handler.space_pressed = False
         self.renderer.enemy = enemy
         visible_x = 5  # Default visible position
@@ -1130,7 +1135,8 @@ class Announcements:
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
                 intro_message=message,
-                room_number=room_number if room_number is not None else getattr(self, 'current_room', 1)
+                room_number=room_number if room_number is not None else getattr(self, 'current_room', 1),
+                battle_log_lines=battle_log_lines,
             )
             self.input_handler.poll()
             time.sleep(0.05)
@@ -1145,13 +1151,19 @@ class Announcements:
     def battle_start(self, enemy):
         self.wait_for_space("Press spacebar to start the battle", enemy=enemy, show_player=True, room_number=self.current_room)
 
-    def win(self):
-        self.wait_for_space("You win!\nPress spacebar to enter the next room", enemy=None, show_player=True, room_number=self.current_room)
+    def win(self, battle_log_lines=None):
+        self.wait_for_space(
+            "You win!\nPress spacebar to enter the next room",
+            enemy=None,
+            show_player=True,
+            room_number=self.current_room,
+            battle_log_lines=battle_log_lines
+        )
 
     def lose(self, enemy):
         self.wait_for_space("You lose!\nPress spacebar to restart", enemy=enemy, show_player=False, room_number=self.current_room)
 
-    def level_up_screen(self, player):
+    def level_up_screen(self, player, battle_log_lines=None):
         # List of upgradable stats and their display names
         stat_options = [
             ("attack", "Attack +1"),
@@ -1177,7 +1189,7 @@ class Announcements:
                 prefix = "-> " if i == selected else "   "
                 lines.append(f"{prefix}{i+1}. {desc}")
             message = "\n".join(lines)
-            self.renderer.render(self.player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            self.renderer.render(self.player, self.room, self.ui, intro_message=message, room_number=self.current_room, battle_log_lines=battle_log_lines)
             # Keyboard navigation: arrows or 1/2/3
             if msvcrt.kbhit():
                 key = msvcrt.getch()
@@ -1246,7 +1258,7 @@ class Announcements:
                     break
             time.sleep(0.08)
 
-    def loot_screen(self, found_items):
+    def loot_screen(self, found_items, battle_log_lines=None):
         # found_items: list of Item objects
         if not found_items:
             return
@@ -1260,7 +1272,7 @@ class Announcements:
             msg = f"You found {names[0]}!"
         else:
             msg = "You found:\n" + "\n".join(f"- {name}" for name in names)
-        self.wait_for_space(msg, show_player=True, room_number=self.current_room)
+        self.wait_for_space(msg, show_player=True, room_number=self.current_room, battle_log_lines=battle_log_lines)
 
     def equipment_pickup_prompt(self, player, new_item):
         lines = ["Equipment slots full!"]
@@ -1339,16 +1351,16 @@ class Animations:
         self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
         time.sleep(0.3)
 
-    def death(self, entity):
+    def death(self, entity, battle_log_lines=None):
         fade_chars = ['*', '.', ' ']
         old_char = entity.char
         for char in fade_chars:
             entity.char = char
-            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
+            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, battle_log_lines=battle_log_lines)
             time.sleep(0.12)
         entity.char = old_char
         entity.x = -1
-        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
+        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, battle_log_lines=battle_log_lines)
         time.sleep(0.2)
 
     def crit_effect(self, attacker, boss_info_lines=None, battle_log_lines=None):
@@ -1662,7 +1674,8 @@ class Battle:
                     elif isinstance(skill, CritShieldSkill):
                         skill_log = skill.use(player)
                     elif isinstance(skill, LifestealNovaSkill):
-                        skill_log = skill.use(player, living_enemies)
+                        if living_enemies:
+                            skill_log = skill.use(player, living_enemies)
                     elif isinstance(skill, InvincibleSkill):
                         skill_log = skill.use(player)
                     elif isinstance(skill, GoldRushSkill):
@@ -1754,11 +1767,11 @@ class Battle:
                 if hasattr(self, 'animations') and self.animations:
                     for enemy in enemies:
                         if enemy.hp <= 0:
-                            self.animations.death(enemy)
+                            self.animations.death(enemy, battle_log_lines=battle_log[-6:])
                 self.renderer.enemy = None
                 leveled_up = player.gain_xp(8 + 2 * self.current_room)
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
-                    self.announcements.level_up_screen(player)
+                    self.announcements.level_up_screen(player, battle_log_lines=battle_log[-6:])
                     # --- Skill roll on level up (after stat upgrade, before loot) ---
                     skill_chance = 0.35 + 0.01 * player.luck  # 35% base +1% per luck
                     if random.random() < skill_chance:
@@ -1771,11 +1784,11 @@ class Battle:
                 if original_stats:
                     for stat, value in original_stats.items():
                         setattr(player, stat, value)
-                return "win"
+                return "win", battle_log
             if player.hp <= 0:
                 if hasattr(self, 'animations') and self.animations:
                     self.animations.death(player)
-                return "lose"
+                return "lose", battle_log
             time.sleep(time_step)
             clock += time_step
 
@@ -1974,7 +1987,7 @@ class Game:
                 if self.input_handler.quit:
                     return
 
-                result = self.battle_system.battle(self.player, self.enemies, lambda: self.running)
+                result, battle_log = self.battle_system.battle(self.player, self.enemies, lambda: self.running)
 
                 if result == "win":
                     # --- Mark boss as defeated if this was a boss room ---
@@ -2004,7 +2017,7 @@ class Game:
                         self.player.gold += gold_earned
                         found_items.append(type("Gold", (), {"name": f"{gold_earned} gold"})())
                     if found_items:
-                        self.announcements.loot_screen(found_items)
+                        self.announcements.loot_screen(found_items, battle_log_lines=battle_log[-6:])
                         for item in found_items:
                             if isinstance(item, Potion):
                                 # Try to add to inventory
@@ -2025,7 +2038,7 @@ class Game:
                     self.announcements.current_room = self.current_room
                     self.animations.current_room = self.current_room
                     self.battle_system.current_room = self.current_room
-                    self.announcements.win()
+                    self.announcements.win(battle_log_lines=battle_log[-6:])
                     self.animations.player_slide_and_disappear()
                 else:
                     self.announcements.lose(self.enemy)
