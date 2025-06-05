@@ -172,10 +172,15 @@ class JackpotSkill(Skill):
 
 class GambleSkill(Skill):
     def __init__(self):
-        super().__init__("Gamble", "50%: gain 10 gold, 50%: lose 5 HP.", cooldown=7.0)
+        super().__init__("Gamble", "Chance to win gold or lose HP. Odds improve with luck.", cooldown=7.0)
     def use(self, player):
         # Each luck point gives +3% win chance (capped at 80%)
         win_chance = min(0.5 + 0.03 * player.luck, 0.8)
+        lose_chance = 1.0 - win_chance
+        self.description = (
+            f"{int(win_chance*100)}%: gain 10 gold, {int(lose_chance*100)}%: lose 5 HP. "
+            "Odds improve with luck."
+        )
         if random.random() < win_chance:
             player.gold += 10
             result = "win 10 gold!"
