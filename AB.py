@@ -1140,7 +1140,8 @@ class Announcements:
                 prefix = "-> " if i == selected else "   "
                 name = skill_cls().name
                 desc = skill_cls().description
-                lines.append(f"{prefix}{i+1}. {name}: {desc}")
+                lines.append(f"{prefix}{i+1}. {name}")
+                lines.append(f"      {desc}")
             lines.append("Press 1-3, arrows, Enter or Space to select.")
             message = "\n".join(lines)
             self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
@@ -1674,6 +1675,7 @@ class Game:
             self.announcements.player = self.player
             self.animations.player = self.player
             # Give the player a Small Healing Potion for testing
+           
             self.player.potions[0] = SmallHealingPotion()
 
             # --- Job selection continues ---
