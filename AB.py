@@ -258,7 +258,7 @@ class Enemy(Entity):
         hp_scale = 1 + 0.02 * (room_number - 1)
         atk_scale = 1 + 0.015 * (room_number - 1)
         spd_scale = 1 + 0.01 * (room_number - 1)
-        def_scale = 1 + 0.015 * (room_number - 1)
+        def_scale = 1 + 0.01 * (room_number - 1)
         dodge_scale = 1 + 0.01 * (room_number - 1)
 
         if enemy_type == 'basic':
@@ -281,7 +281,7 @@ class Enemy(Entity):
             self.hp = int(5 * (1 + 0.07 * (room_number - 1)))
             self.max_hp = self.hp
             self.attack = int(1 * (1 + 0.07 * (room_number - 1)))
-            self.attack_speed = 1.12 * spd_scale  # Speed scales more
+            self.attack_speed = 1.1 * spd_scale  # Speed scales more
             self.crit_chance = 0.1
             self.crit_damage = 2.0
             self.defence = int(0 * def_scale)
@@ -298,7 +298,7 @@ class Enemy(Entity):
             self.attack_speed = 0.5 * (1 + 0.03 * (room_number - 1))  # Speed scales less
             self.crit_chance = 0.05
             self.crit_damage = 2.0
-            self.defence = int(0 + (room_number // 5))  # Defence increases every 2 rooms
+            self.defence = int(0 + (room_number // 8))  # Defence increases every 2 rooms
             self.health_regen = 0
             self.thorn_damage = 0
             self.lifesteal = 0.0
@@ -307,6 +307,64 @@ class Enemy(Entity):
             char = '?'
             super().__init__(x, char)
 
+class BossEnemy(Enemy):
+    """Base class for all boss enemies."""
+    def __init__(self, x, name="Boss", room_number=1):
+        super().__init__(x, enemy_type='boss', room_number=room_number)
+        self.name = name
+        self.char = 'B'  # Default boss character
+
+class RegenBoss(BossEnemy):
+    """Boss with high health regeneration."""
+    def __init__(self, x, room_number=1):
+        super().__init__(x, name="Regen Boss", room_number=room_number)
+        self.char = 'R'
+        self.hp = int(90 + 8 * room_number)  # Lowered HP scaling a bit
+        self.max_hp = self.hp
+        self.attack = 3 + room_number // 8   # Lowered attack
+        self.attack_speed = 0.8
+        self.crit_chance = 0.12
+        self.crit_damage = 2.0
+        self.defence = 2 + room_number // 15  # Lowered defence
+        self.health_regen = 6 + room_number // 4  # Still high regen!
+        self.thorn_damage = 1
+        self.lifesteal = 0.0
+        self.dodge_chance = 0.07
+
+class LifestealBoss(BossEnemy):
+    """Boss with high lifesteal."""
+    def __init__(self, x, room_number=1):
+        super().__init__(x, name="Lifesteal Boss", room_number=room_number)
+        self.char = 'L'
+        self.hp = int(80 + 8 * room_number)  # Lowered HP scaling a bit
+        self.max_hp = self.hp
+        self.attack = 4 + room_number // 7   # Lowered attack
+        self.attack_speed = 0.9
+        self.crit_chance = 0.10
+        self.crit_damage = 2.0
+        self.defence = 1 + room_number // 18  # Lowered defence
+        self.health_regen = 1
+        self.thorn_damage = 1
+        self.lifesteal = 0.18  # Still high lifesteal!
+        self.dodge_chance = 0.08
+
+class FinalBoss(BossEnemy):
+    """Absolutely broken placeholder final boss."""
+    def __init__(self, x, room_number=1):
+        super().__init__(x, name="??? FINAL BOSS ???", room_number=room_number)
+        self.char = 'F'
+        self.hp = 9999
+        self.max_hp = self.hp
+        self.attack = 999
+        self.attack_speed = 3.0
+        self.crit_chance = 0.99
+        self.crit_damage = 9.99
+        self.defence = 99
+        self.health_regen = 99
+        self.thorn_damage = 99
+        self.lifesteal = 0.99
+        self.dodge_chance = 0.7
+        
 # --- Item Classes ---
 class Item:
     """Base class for all items."""
@@ -618,7 +676,23 @@ class UI:
                 f"LIFESTEAL: {enemy.lifesteal:.1f}",
                 f"DODGE%: {int(round(enemy.dodge_chance * 100))}",
             ]
-            stats += [''] * (game_height - len(stats))
+            # Calculate how many blank lines to add so the boss chance is at the bottom
+            lines_needed = game_height - len(stats) - 2
+            if lines_needed > 0:
+                stats += [''] * lines_needed
+            # Add a separator and the boss chance at the very bottom
+            stats.append('-' * 14)
+            # Try to get boss_probability from the game instance
+            boss_chance = 0.0
+            try:
+                import __main__
+                if hasattr(__main__, 'game'):
+                    boss_chance = getattr(__main__.game, 'boss_probability', 0.0)
+            except Exception:
+                pass
+            stats.append(f"BOSS CHANCE: {boss_chance*100:.0f}%")
+            # If stats is now longer than game_height, trim it (shouldn't happen)
+            stats = stats[:game_height]
         return stats
 
     def get_room_counter_line(self, room_number):
@@ -1355,7 +1429,11 @@ class Game:
         self.running = True
         self.current_room = 1  # Add this line to track room number
         self.shop_probability = 0.0
-
+        self.boss_probability = 0.0
+        self.bosses_encountered = set()  # Track which bosses have been fought
+        self.bosses_defeated = set()     # Track which bosses have been defeated
+        self.boss_classes = [RegenBoss, LifestealBoss]
+        
         # Link room number to other classes
         self.announcements.current_room = self.current_room
         self.animations.current_room = self.current_room
@@ -1447,6 +1525,11 @@ class Game:
 
             self.animations.player_slide_and_disappear()
 
+            # --- Track which bosses have been encountered this run ---
+            self.bosses_encountered = set()
+            self.bosses_defeated = set()
+            self.boss_probability = 0.0
+
             while self.running:
                 self.current_room += 1
 
@@ -1458,8 +1541,39 @@ class Game:
                     else:
                         self.shop_probability += 0.05
 
+                # --- BOSS LOGIC: Only after room 10 ---
+                boss_room = False
+                boss_to_spawn = None
+                if self.current_room >= 10 and len(self.bosses_defeated) < len(self.boss_classes):
+                    if random.random() < self.boss_probability:
+                        boss_room = True
+                        # Pick a boss not yet encountered this run
+                        available_bosses = [b for b in self.boss_classes if b not in self.bosses_encountered]
+                        if not available_bosses:
+                            available_bosses = [b for b in self.boss_classes if b not in self.bosses_defeated]
+                        boss_to_spawn = random.choice(available_bosses)
+                        self.bosses_encountered.add(boss_to_spawn)
+                        self.boss_probability = 0.0
+                    else:
+                        self.boss_probability += 0.01
+                else:
+                    self.boss_probability = 0.0
+
                 self.reset_player_position()
-                self.spawn_enemies()  # <--- changed from spawn_enemy()
+
+                # --- Spawn boss or normal enemies ---
+                if boss_room and boss_to_spawn:
+                    boss = boss_to_spawn(x=(WIDTH * 3) // 4, room_number=self.current_room)
+                    self.enemies = [boss]
+                    self.enemy = boss
+                    self.renderer.enemy = boss
+                    self.announcements.wait_for_space(
+                        f"BOSS ROOM!\nYou face {boss.name}!",
+                        enemy=boss, show_player=True, room_number=self.current_room
+                    )
+                else:
+                    self.spawn_enemies()
+
                 self.announcements.current_room = self.current_room
                 self.animations.current_room = self.current_room
                 self.battle_system.current_room = self.current_room
@@ -1476,6 +1590,10 @@ class Game:
                 result = self.battle_system.battle(self.player, self.enemies, lambda: self.running)
 
                 if result == "win":
+                    # --- Mark boss as defeated if this was a boss room ---
+                    if boss_room and boss_to_spawn:
+                        self.bosses_defeated.add(boss_to_spawn)
+
                     # --- Luck-based loot chance ---
                     base_chance = 0.20
                     luck_bonus = (self.player.luck // 2) * 0.01  # +1% per 2 luck
