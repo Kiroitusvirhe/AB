@@ -8,6 +8,66 @@ WIDTH = 60
 HEIGHT = 17  # Increased by 1 for even bottom boxes
 PLAYER_START_X = WIDTH * 1 // 4  # Player starts at 1/4th of the width, mirroring enemy at 3/4th
 
+class Skill:
+    """Base class for all skills."""
+    def __init__(self, name, description, cooldown):
+        self.name = name
+        self.description = description
+        self.cooldown = cooldown
+
+    def use(self, player, *args, **kwargs):
+        """Override in subclasses. Should return a log string or None."""
+        return None
+
+class BigSlashSkill(Skill):
+    def __init__(self):
+        super().__init__("Big Slash", "Deal double damage to all enemies.", cooldown=8.0)
+
+    def use(self, player, enemies):
+        if player.can_use_skill():
+            log = []
+            for enemy in enemies:
+                damage = max(0, player.attack * 2 - enemy.defence)
+                enemy.hp -= damage
+                log.append(f"{enemy.char}: {damage:.0f} damage!")
+            player.skill_cooldown_timer = 0.0
+            return f"BIG SLASH! " + ", ".join(log)
+        return None
+
+class DoubleAttackSkill(Skill):
+    def __init__(self):
+        super().__init__("Double Attack", "Attack twice with bonus crit chance.", cooldown=6.0)
+
+    def use(self, player, enemy):
+        if player.can_use_skill():
+            results = []
+            orig_crit = player.crit_chance
+            player.crit_chance = min(1.0, player.crit_chance + 0.10)
+            for _ in range(2):
+                damage = max(1, player.attack - enemy.defence)
+                crit = False
+                if random.random() < player.crit_chance:
+                    damage = int(damage * player.crit_damage)
+                    crit = True
+                enemy.hp -= damage
+                results.append(f"{damage:.0f}{' (CRIT!)' if crit else ''} damage!")
+            player.crit_chance = orig_crit
+            player.skill_cooldown_timer = 0.0
+            return f"DOUBLE ATTACK: {' + '.join(results)}"
+        return None
+
+class BlessingLightSkill(Skill):
+    def __init__(self):
+        super().__init__("Blessing Light", "Heal 10% of max HP.", cooldown=12.0)
+
+    def use(self, player):
+        if player.can_use_skill():
+            heal = max(1, int(player.max_hp * 0.10))
+            player.hp = min(player.max_hp, player.hp + heal)
+            player.skill_cooldown_timer = 0.0
+            return f"Paladin uses BLESSING LIGHT! (+{heal:.0f} HP)"
+        return None
+
 # --- Entity Classes ---
 class Entity:
     """Base class for all entities (player, enemies)."""
@@ -42,7 +102,8 @@ class Player(Entity):
         self.luck = 0  # <--- Add this line
         self.lifesteal_pool = 0.0  # <--- Add this line for cumulative lifesteal
         self.gold = 0
-        
+        self.skills = []
+
     def gain_xp(self, amount):
         leveled_up = False
         self.xp += amount
@@ -188,17 +249,7 @@ class Fighter(Player):
         sword = Sword(level=1, tier="Good")
         self.equipment_items[0] = sword
         self.equip(sword)
-
-    def use_skill(self, enemies):
-        if self.can_use_skill():
-            log = []
-            for enemy in enemies:
-                damage = max(0, self.attack * 2 - enemy.defence)
-                enemy.hp -= damage
-                log.append(f"{enemy.char}: {damage:.0f} damage!")
-            self.skill_cooldown_timer = 0.0
-            return f"BIG SLASH! " + ", ".join(log)
-        return None
+        self.skills = [BigSlashSkill()]
 
 class Assassin(Player):
     def __init__(self, x):
@@ -212,24 +263,7 @@ class Assassin(Player):
         boots = Boots(level=1, tier="Good")
         self.equipment_items[0] = boots
         self.equip(boots)
-
-    def use_skill(self, enemy):
-        if self.can_use_skill():
-            results = []
-            orig_crit = self.crit_chance
-            self.crit_chance = min(1.0, self.crit_chance + 0.10)
-            for _ in range(2):
-                damage = max(1, self.attack - enemy.defence)
-                crit = False
-                if random.random() < self.crit_chance:
-                    damage = int(damage * self.crit_damage)
-                    crit = True
-                enemy.hp -= damage
-                results.append(f"{damage:.0f}{' (CRIT!)' if crit else ''} damage!")
-            self.crit_chance = orig_crit
-            self.skill_cooldown_timer = 0.0
-            return f"DOUBLE ATTACK: {' + '.join(results)}"
-        return None
+        self.skills = [DoubleAttackSkill()]
 
 class Paladin(Player):
     def __init__(self, x):
@@ -241,14 +275,7 @@ class Paladin(Player):
         shield = Shield(level=1, tier="Good")
         self.equipment_items[0] = shield
         self.equip(shield)
-
-    def use_skill(self):
-        if self.can_use_skill():
-            heal = max(1, int(self.max_hp * 0.10))
-            self.hp = min(self.max_hp, self.hp + heal)
-            self.skill_cooldown_timer = 0.0
-            return f"Paladin uses BLESSING LIGHT! (+{heal:.0f} HP)"
-        return None
+        self.skills = [BlessingLightSkill()]
 
 # --- Enemy Classes ---
 class Enemy(Entity):
@@ -1316,16 +1343,19 @@ class Battle:
             skill_log = None
             skill_name = None
             living_enemies = [e for e in enemies if e.hp > 0]
-            if isinstance(player, Fighter) and player.can_use_skill():
-                skill_log = player.use_skill(living_enemies)
-                skill_name = "BIG SLASH!"
-            elif isinstance(player, Assassin) and player.can_use_skill():
-                if living_enemies:
-                    skill_log = player.use_skill(random.choice(living_enemies))
-                    skill_name = "DOUBLE ATTACK!"
-            elif isinstance(player, Paladin) and player.can_use_skill():
-                skill_log = player.use_skill()
-                skill_name = "BLESSING LIGHT!"
+            if player.skills and player.can_use_skill():
+                skill = player.skills[0]
+                # Use correct arguments for each skill
+                if isinstance(skill, BigSlashSkill):
+                    skill_log = skill.use(player, living_enemies)
+                    skill_name = skill.name
+                elif isinstance(skill, DoubleAttackSkill):
+                    if living_enemies:
+                        skill_log = skill.use(player, random.choice(living_enemies))
+                        skill_name = skill.name
+                elif isinstance(skill, BlessingLightSkill):
+                    skill_log = skill.use(player)
+                    skill_name = skill.name
             if skill_log:
                 if hasattr(self, 'animations') and self.animations and skill_name:
                     self.animations.skill_effect(
