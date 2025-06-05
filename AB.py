@@ -1544,18 +1544,27 @@ class Game:
                 # --- BOSS LOGIC: Only after room 10 ---
                 boss_room = False
                 boss_to_spawn = None
-                if self.current_room >= 10 and len(self.bosses_defeated) < len(self.boss_classes):
-                    if random.random() < self.boss_probability:
+                final_boss_ready = False
+
+                if self.current_room >= 10:
+                    # If both regular bosses are defeated, spawn the final boss
+                    if len(self.bosses_defeated) >= len(self.boss_classes):
+                        final_boss_ready = True
                         boss_room = True
-                        # Pick a boss not yet encountered this run
-                        available_bosses = [b for b in self.boss_classes if b not in self.bosses_encountered]
-                        if not available_bosses:
-                            available_bosses = [b for b in self.boss_classes if b not in self.bosses_defeated]
-                        boss_to_spawn = random.choice(available_bosses)
-                        self.bosses_encountered.add(boss_to_spawn)
-                        self.boss_probability = 0.0
-                    else:
-                        self.boss_probability += 0.01
+                        boss_to_spawn = FinalBoss
+                        self.boss_probability = 0.0  # No more boss chance after this
+                    # Otherwise, normal boss logic
+                    elif len(self.bosses_defeated) < len(self.boss_classes):
+                        if random.random() < self.boss_probability:
+                            boss_room = True
+                            available_bosses = [b for b in self.boss_classes if b not in self.bosses_encountered]
+                            if not available_bosses:
+                                available_bosses = [b for b in self.boss_classes if b not in self.bosses_defeated]
+                            boss_to_spawn = random.choice(available_bosses)
+                            self.bosses_encountered.add(boss_to_spawn)
+                            self.boss_probability = 0.0
+                        else:
+                            self.boss_probability += 0.01
                 else:
                     self.boss_probability = 0.0
 
@@ -1567,10 +1576,16 @@ class Game:
                     self.enemies = [boss]
                     self.enemy = boss
                     self.renderer.enemy = boss
-                    self.announcements.wait_for_space(
-                        f"BOSS ROOM!\nYou face {boss.name}!",
-                        enemy=boss, show_player=True, room_number=self.current_room
-                    )
+                    if final_boss_ready:
+                        self.announcements.wait_for_space(
+                            f"!!! FINAL BOSS ROOM !!!\nYou face {boss.name}!",
+                            enemy=boss, show_player=True, room_number=self.current_room
+                        )
+                    else:
+                        self.announcements.wait_for_space(
+                            f"BOSS ROOM!\nYou face {boss.name}!",
+                            enemy=boss, show_player=True, room_number=self.current_room
+                        )
                 else:
                     self.spawn_enemies()
 
@@ -1591,7 +1606,7 @@ class Game:
 
                 if result == "win":
                     # --- Mark boss as defeated if this was a boss room ---
-                    if boss_room and boss_to_spawn:
+                    if boss_room and boss_to_spawn and not final_boss_ready:
                         self.bosses_defeated.add(boss_to_spawn)
 
                     # --- Luck-based loot chance ---
