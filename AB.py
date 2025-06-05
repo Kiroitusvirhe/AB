@@ -129,7 +129,15 @@ class LifestealNovaSkill(Skill):
             player.skill_cooldown_timer = 0.0
             return f"LIFESTEAL NOVA! All enemies take {player.attack} damage, you heal {total} HP!"
         return None
-    
+
+SKILL_POOL = [
+    ThornBurstSkill,
+    LuckyStrikeSkill,
+    RegenWaveSkill,
+    CritShieldSkill,
+    LifestealNovaSkill,
+    # Add more pool skills here as you create them
+]    
     
 # --- Entity Classes ---
 class Entity:
@@ -174,7 +182,7 @@ class Player(Entity):
         while self.xp >= self.xp_to_next:
             self.xp -= self.xp_to_next
             self.level += 1
-            self.xp_to_next = int(self.xp_to_next * 1.5)  # XP needed increases each level
+            self.xp_to_next = int(self.xp_to_next * 1.5)
             leveled_up = True
         return leveled_up
 
@@ -1124,6 +1132,35 @@ class Announcements:
                     return
             time.sleep(0.08)
 
+    def skill_learn_screen(self, player, skill_classes):
+        selected = 0
+        while True:
+            lines = ["LEVEL UP! Choose a new skill:"]
+            for i, skill_cls in enumerate(skill_classes):
+                prefix = "-> " if i == selected else "   "
+                name = skill_cls().name
+                desc = skill_cls().description
+                lines.append(f"{prefix}{i+1}. {name}: {desc}")
+            lines.append("Press 1-3, arrows, Enter or Space to select.")
+            message = "\n".join(lines)
+            self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'1', b'2', b'3']:
+                    selected = int(key) - 1
+                    break
+                elif key in [b'H', b'K', b'w']:
+                    selected = (selected - 1) % len(skill_classes)
+                elif key in [b'P', b'M', b's']:
+                    selected = (selected + 1) % len(skill_classes)
+                elif key == b'\r' or key == b' ':
+                    break
+            time.sleep(0.08)
+        # Actually add the skill
+        new_skill = skill_classes[selected]()
+        player.skills.append(new_skill)
+        self.wait_for_space(f"You learned {new_skill.name}!", show_player=True, room_number=self.current_room)
+
 # --- Animations Class ---
 class Animations:
     """Handles all game animations (player slide, attacks, etc)."""
@@ -1528,6 +1565,13 @@ class Battle:
                 leveled_up = player.gain_xp(8 + 2 * self.current_room)
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
                     self.announcements.level_up_screen(player)
+                    # --- Skill roll on level up (after stat upgrade, before loot) ---
+                    if random.random() < 0.4:  # 40% chance
+                        owned_types = {type(skill) for skill in player.skills}
+                        available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
+                        if available_skills:
+                            choices = random.sample(available_skills, min(3, len(available_skills)))
+                            self.announcements.skill_learn_screen(player, choices)
                 # Loot logic (unchanged for now)
                 if original_stats:
                     for stat, value in original_stats.items():
@@ -1567,6 +1611,7 @@ class Game:
         self.announcements.current_room = self.current_room
         self.animations.current_room = self.current_room
         self.battle_system.current_room = self.current_room
+        
 
     # --- Reset Methods ---
     def reset_player_stats(self):
@@ -1651,6 +1696,7 @@ class Game:
             self.animations.player = self.player
             self.animations.current_room = self.current_room
             self.battle_system.current_room = self.current_room
+            self.player.announcements = self.announcements  # <-- KEEP THIS LINE
 
             self.animations.player_slide_and_disappear()
 
