@@ -189,9 +189,12 @@ class GlassCannonSkill(Skill):
     def __init__(self):
         super().__init__("Glass Cannon", "+5 atk, -10 max HP (permanent).", cooldown=0.0)
     def use(self, player):
+        if "GlassCannonSkill" in player.permanent_skills_used:
+            return None
         player.attack += 5
         player.max_hp = max(1, player.max_hp - 10)
         player.hp = min(player.hp, player.max_hp)
+        player.permanent_skills_used.add("GlassCannonSkill")
         self.cooldown_timer = 0.0
         return "GLASS CANNON! +5 atk, -10 max HP!"
 
@@ -234,8 +237,11 @@ class IronWillSkill(Skill):
     def __init__(self):
         super().__init__("Iron Will", "+10 max HP (permanent).", cooldown=0.0)
     def use(self, player):
+        if "IronWillSkill" in player.permanent_skills_used:
+            return None
         player.max_hp += 10
         player.hp += 10
+        player.permanent_skills_used.add("IronWillSkill")
         self.cooldown_timer = 0.0
         return "IRON WILL! +10 max HP!"
 
@@ -243,7 +249,10 @@ class SharpenedMindSkill(Skill):
     def __init__(self):
         super().__init__("Sharpened Mind", "+1 attack (permanent).", cooldown=0.0)
     def use(self, player):
+        if "SharpenedMindSkill" in player.permanent_skills_used:
+            return None
         player.attack += 1
+        player.permanent_skills_used.add("SharpenedMindSkill")
         self.cooldown_timer = 0.0
         return "SHARPENED MIND! +1 attack!"
 
@@ -251,9 +260,12 @@ class CowardsGraceSkill(Skill):
     def __init__(self):
         super().__init__("Coward's Grace", "+10% dodge, -5 max HP (permanent).", cooldown=0.0)
     def use(self, player):
+        if "CowardsGraceSkill" in player.permanent_skills_used:
+            return None
         player.dodge_chance = min(0.7, player.dodge_chance + 0.10)
         player.max_hp = max(1, player.max_hp - 5)
         player.hp = min(player.hp, player.max_hp)
+        player.permanent_skills_used.add("CowardsGraceSkill")
         self.cooldown_timer = 0.0
         return "COWARD'S GRACE! +10% dodge, -5 max HP!"
 
@@ -261,8 +273,11 @@ class LeadFeetSkill(Skill):
     def __init__(self):
         super().__init__("Lead Feet", "+5 defence, -10% dodge (permanent).", cooldown=0.0)
     def use(self, player):
+        if "LeadFeetSkill" in player.permanent_skills_used:
+            return None
         player.defence += 5
         player.dodge_chance = max(0.0, player.dodge_chance - 0.10)
+        player.permanent_skills_used.add("LeadFeetSkill")
         self.cooldown_timer = 0.0
         return "LEAD FEET! +5 def, -10% dodge!"
 
@@ -270,9 +285,12 @@ class BloodPactSkill(Skill):
     def __init__(self):
         super().__init__("Blood Pact", "+2 attack, -10 max HP (permanent).", cooldown=0.0)
     def use(self, player):
+        if "BloodPactSkill" in player.permanent_skills_used:
+            return None
         player.attack += 2
         player.max_hp = max(1, player.max_hp - 10)
         player.hp = min(player.hp, player.max_hp)
+        player.permanent_skills_used.add("BloodPactSkill")
         self.cooldown_timer = 0.0
         return "BLOOD PACT! +2 atk, -10 max HP!"
 
@@ -338,6 +356,7 @@ class Player(Entity):
         self.gold = 0
         self.skills = []
         self.timed_effects = {}  # e.g. {"crit_shield": {"value": 10, "timer": 3.0}}
+        self.permanent_skills_used = set()
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -588,7 +607,7 @@ class RegenBoss(BossEnemy):
         self.crit_chance = 0.12
         self.crit_damage = 2.0
         self.defence = 2 + room_number // 15
-        self.health_regen = 6 + room_number // 4
+        self.health_regen = 5 + room_number // 10
         self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
@@ -1636,6 +1655,8 @@ class Battle:
 
             for skill in player.skills:
                 skill.cooldown_timer += time_step
+
+
 
             # --- Timed effects update (add this here) ---
             to_remove = []
