@@ -98,15 +98,15 @@ class RegenWaveSkill(Skill):
 
 class CritShieldSkill(Skill):
     def __init__(self):
-        super().__init__("Crit Shield", "Shield: crit% of max HP for 3s.", cooldown=10.0)
+        super().__init__("Shield Wall", "Shield: 3x your defence for 3s.", cooldown=10.0)
     def use(self, player):
         if "crit_shield" not in player.timed_effects:
-            shield = int(player.max_hp * player.crit_chance)
+            shield = max(1, player.defence * 3)
             player.timed_effects["crit_shield"] = {"value": shield, "timer": 3.0}
             self.cooldown_timer = 0.0
-            return f"CRIT SHIELD! Shield {shield:.0f} HP (3s)!"
+            return f"SHIELD WALL! Shield {shield:.0f} HP (3s)!"
         else:
-            return "CRIT SHIELD is active!"
+            return "SHIELD WALL is active!"
 
 class LifestealNovaSkill(Skill):
     def __init__(self):
@@ -121,12 +121,39 @@ class LifestealNovaSkill(Skill):
         self.cooldown_timer = 0.0
         return f"LIFESTEAL NOVA! {player.attack:.0f} dmg to all, heal {total:.0f}!"
 
+class CounterDodgeSkill(Skill):
+    def __init__(self):
+        super().__init__("Counter Dodge", "Dodging has a 50% chance to counterattack.", cooldown=0.0)
+    def use(self, player):
+        # This skill is passive, so nothing to do on use
+        return None
+
+class GoldRushSkill(Skill):
+    def __init__(self):
+        super().__init__("Gold Rush", "Gain 2 gold every 8s.", cooldown=8.0)
+    def use(self, player):
+        player.gold += 2
+        self.cooldown_timer = 0.0
+        return f"GOLD RUSH! You gain 2 gold!"
+
+class GuaranteedCritSkill(Skill):
+    def __init__(self):
+        super().__init__("Sure Crit", "Next attack is a guaranteed crit.", cooldown=7.0)
+    def use(self, player, enemy):
+        damage = int(max(1, player.attack - enemy.defence) * player.crit_damage)
+        enemy.hp -= damage
+        self.cooldown_timer = 0.0
+        return f"SURE CRIT! {enemy.char} takes {damage:.0f} CRIT dmg!"
+
 SKILL_POOL = [
     ThornBurstSkill,
     LuckyStrikeSkill,
     RegenWaveSkill,
     CritShieldSkill,
     LifestealNovaSkill,
+    CounterDodgeSkill,
+    GoldRushSkill,
+    GuaranteedCritSkill,
     # Add more pool skills here as you create them
 ]    
     
@@ -1351,7 +1378,14 @@ class Battle:
             # Dodge check first
             if random.random() < defender.dodge_chance:
                 self.animations.dodge_effect(defender, boss_info_lines, battle_log_lines)
-                return [f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"]
+                msg = f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
+                # Counter Dodge logic
+                if hasattr(defender, "skills") and any(isinstance(skill, CounterDodgeSkill) for skill in defender.skills):
+                    if random.random() < 0.5:  # 50% chance to counter
+                        counter_damage = max(1, defender.attack - attacker.defence)
+                        attacker.hp -= counter_damage
+                        msg += f" {defender.char} COUNTERS for {counter_damage:.0f} dmg!"
+                return [msg]
             # Crit check
             crit = False
             if random.random() < attacker.crit_chance:
