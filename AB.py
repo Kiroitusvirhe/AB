@@ -612,7 +612,7 @@ class RegenBoss(BossEnemy):
         self.crit_chance = 0.12
         self.crit_damage = 2.0
         self.defence = 2 + room_number // 15
-        self.health_regen = 5 + room_number // 10
+        self.health_regen = 4 + room_number // 12
         self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
@@ -1061,10 +1061,24 @@ class Renderer:
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
             else:
                 if y == self.height - 1:
+                    # Draw player
                     if 0 <= player.x < self.width:
                         line[player.x] = player.char
-                    if self.enemy is not None and 0 <= self.enemy.x < self.width:
-                        line[self.enemy.x] = self.enemy.char
+                    # Draw all enemies side by side, spaced apart
+                    enemies = getattr(player, "game", None)
+                    if enemies is not None and hasattr(enemies, "enemies"):
+                        enemies = enemies.enemies
+                    else:
+                        enemies = getattr(self, "enemies", None)
+                    if enemies is None:
+                        enemies = [self.enemy] if self.enemy else []
+                    # Place enemies at fixed intervals from the right
+                    spacing = 4
+                    for idx, enemy in enumerate(enemies):
+                        ex = self.width - 5 - idx * spacing
+                        enemy.x = ex  # <--- Add this line!
+                        if 0 <= ex < self.width:
+                            line[ex] = enemy.char
                 print('|' + ''.join(line) + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
 
@@ -1464,7 +1478,7 @@ class Animations:
             frames = ['>', '>>']
             pos = attacker.x + 1
         else:
-            frames = ['<', '<<']
+            frames = ['<<']
             pos = attacker.x - 1
 
         old_get_landscape_line = self.room.get_landscape_line
@@ -1778,14 +1792,16 @@ class Battle:
 
             # --- Render ---
             if acted or int(clock * 10) % 2 == 0:
-                # Show stats for the main enemy (first living)
-                main_enemy = next((e for e in enemies if e.hp > 0), None)
+                living_enemies = [e for e in enemies if e.hp > 0]
+                if living_enemies:
+                    main_enemy = max(living_enemies, key=lambda e: (e.max_hp, e.attack))
+                else:
+                    main_enemy = None
                 self.renderer.enemy = main_enemy
                 self.renderer.render(
                     player, self.room, self.ui,
                     boss_info_lines=self.ui.get_enemy_stats_lines(main_enemy, self.room.height),
-                    battle_log_lines=battle_log[-6:],
-                    room_number=self.current_room
+                    battle_log_lines=battle_log[-6:]  # <-- Add this line
                 )
 
             # --- Check for win/lose ---
@@ -1874,9 +1890,9 @@ class Game:
 
         # Only add extra enemies for rooms > 10
         if room > 10:
-            max_extra = 5  # Arbitrary cap, adjust as needed
+            max_extra = 10  # Arbitrary cap, adjust as needed
             for i in range(1, max_extra + 1):
-                chance = min(0.01 * (room - 10), 0.40)  # 1% per room after 10, capped at 40%
+                chance = min(0.04 * (room - 10), 0.40)  # 1% per room after 10, capped at 40%
                 if random.random() < chance:
                     # Each extra enemy is based on an earlier room (further back for each extra)
                     weaker_room = max(1, room - 2 * i)
