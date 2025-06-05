@@ -145,6 +145,28 @@ class GuaranteedCritSkill(Skill):
         self.cooldown_timer = 0.0
         return f"SURE CRIT! {enemy.char} takes {damage:.0f} CRIT dmg!"
 
+class AdrenalineRushSkill(Skill):
+    def __init__(self):
+        super().__init__("Adrenaline Rush", "+50% attack speed for 3s.", cooldown=10.0)
+    def use(self, player):
+        if "adrenaline" not in player.timed_effects:
+            boost = player.attack_speed * 0.5
+            player.timed_effects["adrenaline"] = {"value": boost, "timer": 3.0}
+            player.attack_speed += boost
+            self.cooldown_timer = 0.0
+            return "ADRENALINE RUSH! Atk speed up!"
+        else:
+            return "ADRENALINE already active!"
+
+class JackpotSkill(Skill):
+    def __init__(self):
+        super().__init__("Jackpot", "Gain gold equal to your luck.", cooldown=10.0)
+    def use(self, player):
+        gold = player.luck
+        player.gold += gold
+        self.cooldown_timer = 0.0
+        return f"JACKPOT! You gain {gold} gold!"
+
 SKILL_POOL = [
     ThornBurstSkill,
     LuckyStrikeSkill,
@@ -154,6 +176,8 @@ SKILL_POOL = [
     CounterDodgeSkill,
     GoldRushSkill,
     GuaranteedCritSkill,
+    AdrenalineRushSkill,
+    JackpotSkill, 
     # Add more pool skills here as you create them
 ]    
     
@@ -1487,6 +1511,8 @@ class Battle:
                 if data["timer"] <= 0:
                     to_remove.append(effect)
             for effect in to_remove:
+                if effect == "adrenaline":
+                    player.attack_speed -= player.timed_effects[effect]["value"]
                 del player.timed_effects[effect]
 
             skill_log = None
@@ -1593,7 +1619,8 @@ class Battle:
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
                     self.announcements.level_up_screen(player)
                     # --- Skill roll on level up (after stat upgrade, before loot) ---
-                    if random.random() < 0.3:  # 40% chance
+                    skill_chance = 0.35 + 0.01 * player.luck  # 35% base +1% per luck
+                    if random.random() < skill_chance:
                         owned_types = {type(skill) for skill in player.skills}
                         available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
                         if available_skills:
