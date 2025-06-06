@@ -1837,7 +1837,8 @@ class Battle:
                     player, self.room, self.ui,
                     boss_info_lines=self.ui.get_enemy_stats_lines(main_enemy, self.room.height),
                     battle_log_lines=battle_log[-6:],
-                    room_number=self.current_room
+                    room_number=self.current_room,
+                    enemies=enemies,
                 )
 
             # --- Check for win/lose ---
