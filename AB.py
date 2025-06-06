@@ -1037,7 +1037,7 @@ class Renderer:
     def clear(self):
         print('\033[H', end='')
 
-    def render(self, player, room, ui, boss_info_lines=None, battle_log_lines=None, intro_message=None, room_number=None):
+    def render(self, player, room, ui, boss_info_lines=None, battle_log_lines=None, intro_message=None, room_number=None, enemies=None):
         self.clear()
         stats_col_width = 16
         boss_col_width = 16
@@ -1067,15 +1067,9 @@ class Renderer:
                     # Draw player
                     if 0 <= player.x < self.width:
                         line[player.x] = player.char
-                    # Draw all enemies side by side, spaced apart
-                    enemies = getattr(player, "game", None)
-                    if enemies is not None and hasattr(enemies, "enemies"):
-                        enemies = enemies.enemies
-                    else:
-                        enemies = getattr(self, "enemies", None)
+                    # Use the enemies argument passed to render
                     if enemies is None:
                         enemies = [self.enemy] if self.enemy else []
-                    # Place enemies at fixed intervals from the right
                     spacing = 4
                     for idx, enemy in enumerate(enemies):
                         if getattr(enemy, "dead", False):
@@ -1401,28 +1395,28 @@ class Animations:
         self.player = player
         self.current_room = 1  # Will be set by Game
 
-    def player_slide_and_disappear(self):
+    def player_slide_and_disappear(self, enemies=None):
         for x in range(self.player.x, WIDTH):
             self.player.x = x
-            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
+            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, enemies=enemies)
             time.sleep(0.02)
         self.player.x = -1
-        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room)
+        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, enemies=enemies)
         time.sleep(0.3)
 
-    def death(self, entity, battle_log_lines=None):
+    def death(self, entity, battle_log_lines=None, enemies=None):
         fade_chars = ['*', '.', ' ']
         old_char = entity.char
         for char in fade_chars:
             entity.char = char
-            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, battle_log_lines=battle_log_lines)
+            self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, battle_log_lines=battle_log_lines, enemies=enemies)
             time.sleep(0.12)
         entity.char = old_char
         entity.x = -1
-        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, battle_log_lines=battle_log_lines)
+        self.renderer.render(self.player, self.room, self.ui, room_number=self.current_room, battle_log_lines=battle_log_lines, enemies=enemies)
         time.sleep(0.2)
 
-    def crit_effect(self, attacker, boss_info_lines=None, battle_log_lines=None):
+    def crit_effect(self, attacker, boss_info_lines=None, battle_log_lines=None, enemies=None):
         y = self.room.height - 2
         old_get_landscape_line = self.room.get_landscape_line
 
@@ -1445,7 +1439,8 @@ class Animations:
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
                 battle_log_lines=battle_log_lines,
-                room_number=self.current_room
+                room_number=self.current_room,
+                enemies=enemies
             )
             time.sleep(0.8)
         finally:
@@ -1454,10 +1449,11 @@ class Animations:
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
             battle_log_lines=battle_log_lines,
-            room_number=self.current_room
+            room_number=self.current_room,
+            enemies=enemies
         )
 
-    def dodge_effect(self, target, boss_info_lines=None, battle_log_lines=None):
+    def dodge_effect(self, target, boss_info_lines=None, battle_log_lines=None, enemies=None):
         y = self.room.height - 2
         old_get_landscape_line = self.room.get_landscape_line
 
@@ -1480,7 +1476,8 @@ class Animations:
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
                 battle_log_lines=battle_log_lines,
-                room_number=self.current_room
+                room_number=self.current_room,
+                enemies=enemies
             )
             time.sleep(0.8)
         finally:
@@ -1489,10 +1486,11 @@ class Animations:
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
             battle_log_lines=battle_log_lines,
-            room_number=self.current_room
+            room_number=self.current_room,
+            enemies=enemies
         )
 
-    def slash(self, attacker, target=None, boss_info_lines=None, battle_log_lines=None):
+    def slash(self, attacker, target=None, boss_info_lines=None, battle_log_lines=None, enemies=None):
         y = self.room.height - 1
 
         if target is not None and attacker.x < target.x:
@@ -1526,7 +1524,8 @@ class Animations:
                     self.player, self.room, self.ui,
                     boss_info_lines=boss_info_lines,
                     battle_log_lines=battle_log_lines,
-                    room_number=self.current_room
+                    room_number=self.current_room,
+                    enemies=enemies
                 )
                 time.sleep(0.08)
         finally:
@@ -1535,10 +1534,11 @@ class Animations:
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
             battle_log_lines=battle_log_lines,
-            room_number=self.current_room
+            room_number=self.current_room,
+            enemies=enemies
         )
 
-    def skill_effect(self, skill_name, attacker, boss_info_lines=None, battle_log_lines=None):
+    def skill_effect(self, skill_name, attacker, boss_info_lines=None, battle_log_lines=None, enemies=None):
         y = self.room.height - 2  # Same as crit_effect: just above the player
         old_get_landscape_line = self.room.get_landscape_line
 
@@ -1561,7 +1561,8 @@ class Animations:
                 self.player, self.room, self.ui,
                 boss_info_lines=boss_info_lines,
                 battle_log_lines=battle_log_lines,
-                room_number=self.current_room
+                room_number=self.current_room,
+                enemies=enemies
             )
             time.sleep(0.8)
         finally:
@@ -1570,7 +1571,8 @@ class Animations:
             self.player, self.room, self.ui,
             boss_info_lines=boss_info_lines,
             battle_log_lines=battle_log_lines,
-            room_number=self.current_room
+            room_number=self.current_room,
+            enemies=enemies
         )
 
 # --- Battle System Class ---
