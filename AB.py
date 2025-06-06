@@ -258,7 +258,7 @@ class SharpenedMindSkill(Skill):
     def use(self, player):
         if "SharpenedMindSkill" in player.permanent_skills_used:
             return None
-        player.attack += 1
+        player.attack += 1  # Directly increase attack, not via stat_boosts
         player.permanent_skills_used.add("SharpenedMindSkill")
         self.cooldown_timer = 0.0
         return "SHARPENED MIND! +1 attack!"
@@ -1381,11 +1381,14 @@ class Announcements:
         # Actually add the skill
         new_skill = skill_classes[selected]()
         player.skills.append(new_skill)
+        # Call use() for permanent skills (cooldown 0)
+        if hasattr(new_skill, "use") and new_skill.cooldown == 0.0:
+            new_skill.use(player)
         self.wait_for_space(
             f"You learned {new_skill.name}!",
             show_player=True,
             room_number=self.current_room,
-            battle_log_lines=battle_log_lines  # <-- Add this
+            battle_log_lines=battle_log_lines
         )
 
 # --- Animations Class ---
