@@ -300,6 +300,17 @@ class BloodPactSkill(Skill):
         player.permanent_skills_used.add("BloodPactSkill")
         self.cooldown_timer = 0.0
         return "BLOOD PACT! +2 atk, -10 max HP!"
+    
+class BlindingFlashSkill(Skill):
+    def __init__(self):
+        super().__init__("Blinding Flash", "All enemies skip their next attack.", cooldown=10.0)
+    def use(self, player, enemies):
+        for enemy in enemies:
+            if not hasattr(enemy, "skip_turns"):
+                enemy.skip_turns = 0
+            enemy.skip_turns += 1
+        self.cooldown_timer = 0.0
+        return "BLINDING FLASH! All enemies are stunned for 1 turn!"
 
 
 
@@ -324,6 +335,7 @@ SKILL_POOL = [
     CowardsGraceSkill,
     LeadFeetSkill,
     BloodPactSkill,
+    BlindingFlashSkill,
     # Add more pool skills here as you create them
 ]    
     
@@ -1783,6 +1795,9 @@ class Battle:
 
             # --- Each enemy attacks independently ---
             for idx, enemy in enumerate(enemies):
+                if hasattr(enemy, "skip_turns") and enemy.skip_turns > 0:
+                    enemy.skip_turns -= 1
+                    continue  # Skip this enemy's attack this turn
                 if enemy.hp > 0 and clock >= enemy_next_attack[idx]:
                     msgs = self.attack(
                         enemy, player,
