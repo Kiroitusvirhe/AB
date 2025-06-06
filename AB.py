@@ -665,8 +665,8 @@ class RegenBoss(BossEnemy):
         self.attack_speed = 0.8
         self.crit_chance = 0.12
         self.crit_damage = 2.0
-        self.defence = 2 + room_number // 15
-        self.health_regen = 4 + room_number // 12
+        self.defence = 2 + room_number // 16
+        self.health_regen = 2 + room_number // 15
         self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
@@ -1115,27 +1115,29 @@ class Renderer:
                 print('|' + skill_line + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
             else:
+                # Draw the normal game area line
                 line = room.get_landscape_line(y)
+                # Draw player and enemies on the correct line
+                if y == self.height - 1:
+                    if 0 <= player.x < self.width:
+                        line[player.x] = player.char
+                    if enemies is None:
+                        enemies = [self.enemy] if self.enemy else []
+                    for enemy in enemies:
+                        if getattr(enemy, "dead", False):
+                            continue
+                        if 0 <= enemy.x < self.width:
+                            line[enemy.x] = enemy.char
+                # Overlay message if intro_message is present and this is a message line
                 if intro_message is not None:
-                    # Draw the message box in the game area, starting from line 1
                     message_lines = intro_message.split('\n')
                     msg_start = (self.height - len(message_lines)) // 2
                     if msg_start <= y < msg_start + len(message_lines):
-                        line = list(message_lines[y - msg_start].center(self.width))
-                    else:
-                        line = [' '] * self.width
-                else:
-                    if y == self.height - 1:
-                        # Draw player and enemies
-                        if 0 <= player.x < self.width:
-                            line[player.x] = player.char
-                        if enemies is None:
-                            enemies = [self.enemy] if self.enemy else []
-                        for enemy in enemies:
-                            if getattr(enemy, "dead", False):
-                                continue
-                            if 0 <= enemy.x < self.width:
-                                line[enemy.x] = enemy.char
+                        msg = message_lines[y - msg_start].center(self.width)
+                        # Overlay the message on top of the line
+                        for i, ch in enumerate(msg):
+                            if ch != ' ':
+                                line[i] = ch
                 print('|' + ''.join(line) + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
 
@@ -1792,6 +1794,9 @@ class Battle:
                     elif isinstance(skill, DoubleAttackSkill):
                         if living_enemies:
                             skill_log = skill.use(player, random.choice(living_enemies))
+                    elif isinstance(skill, BlindingFlashSkill):
+                        if living_enemies:
+                            skill_log = skill.use(player, living_enemies)
                     elif isinstance(skill, BlessingLightSkill):
                         skill_log = skill.use(player)
                     elif isinstance(skill, ThornBurstSkill):
@@ -1985,16 +1990,20 @@ class Game:
 
         # Only add extra enemies for rooms > 10
         if room > 10:
-            max_extra = 10  # Arbitrary cap, adjust as needed
+            max_extra = 4  # Arbitrary cap, adjust as needed
             for i in range(1, max_extra + 1):
                 chance = min(0.04 * (room - 10), 0.40)  # 1% per room after 10, capped at 40%
                 if random.random() < chance:
                     # Each extra enemy is based on an earlier room (further back for each extra)
                     weaker_room = max(1, room - 2 * i)
                     enemy_type = random.choice(['basic', 'speedy', 'tough'])
-                    # Spread out their x positions a bit
                     x_pos = (WIDTH * 3) // 4 - i * 2
-                    enemies.append(Enemy(x=x_pos, enemy_type=enemy_type, room_number=weaker_room))
+                    # Weaken extra enemies: halve their HP and attack
+                    extra_enemy = Enemy(x=x_pos, enemy_type=enemy_type, room_number=weaker_room)
+                    extra_enemy.hp = max(1, int(extra_enemy.hp * 0.6))
+                    extra_enemy.max_hp = extra_enemy.hp
+                    extra_enemy.attack = max(1, int(extra_enemy.attack * 0.7))
+                    enemies.append(extra_enemy)
                 else:
                     break  # Stop rolling if one fails
 
@@ -2084,9 +2093,7 @@ class Game:
                                 available_bosses = [b for b in self.boss_classes if b not in self.bosses_defeated]
                             boss_to_spawn = random.choice(available_bosses)
                             self.bosses_encountered.add(boss_to_spawn)
-                            self.boss_probability = 0.0
-                        else:
-                            self.boss_probability += 0.005
+                            self.boss_probability = 0.0  # Only reset here!
                 else:
                     self.boss_probability = 0.0
 
@@ -2185,6 +2192,9 @@ class Game:
 
                 if self.input_handler.quit:
                     return
+                
+            if self.current_room >= 10 and not boss_room and not final_boss_ready:
+                self.boss_probability += 0.005
 
     def show_shop(self):
         healing_potion_cls = random.choice([SmallHealingPotion, MediumHealingPotion, MaxHealingPotion])
