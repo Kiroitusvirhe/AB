@@ -1279,7 +1279,7 @@ class Announcements:
             time.sleep(0.08)
         return selected
 
-    def pre_battle_item_use(self, player, enemy):
+    def pre_battle_item_use(self, player, enemy, enemies=None):
         while any(player.potions):
             # Show inventory and ask if the player wants to use a potion
             lines = ["Use a potion before battle?"]
@@ -1290,7 +1290,7 @@ class Announcements:
                     lines.append(f"{idx+1}. (empty)")
             lines.append("[Press 1-4 to use, or space to start battle]")
             message = "\n".join(lines)
-            self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room, enemies=enemies)
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'1', b'2', b'3', b'4']:
@@ -1513,8 +1513,17 @@ class Animations:
 
         def make_slash_line(frame):
             line = [' '] * self.room.width
+            # Draw all enemies at their real positions
+            if enemies:
+                for enemy in enemies:
+                    if getattr(enemy, "dead", False):
+                        continue
+                    if 0 <= enemy.x < self.room.width:
+                        line[enemy.x] = enemy.char
+            # Draw attacker at their real position (in case attacker is not in enemies)
             if 0 <= attacker.x < self.room.width:
                 line[attacker.x] = attacker.char
+            # Draw slash effect at desired position (use a local variable, not attacker.x)
             if 0 <= pos < self.room.width:
                 for i, ch in enumerate(frame):
                     if 0 <= pos + i < self.room.width:
@@ -2028,7 +2037,7 @@ class Game:
                             self.bosses_encountered.add(boss_to_spawn)
                             self.boss_probability = 0.0
                         else:
-                            self.boss_probability += 0.01
+                            self.boss_probability += 0.005
                 else:
                     self.boss_probability = 0.0
 
@@ -2059,7 +2068,7 @@ class Game:
 
                 # --- Prompt for potion use before battle ---
                 used_potion_prompt = any(self.player.potions)
-                self.announcements.pre_battle_item_use(self.player, self.enemy)
+                self.announcements.pre_battle_item_use(self.player, self.enemy, self.enemies)
                 if not used_potion_prompt:
                     self.announcements.battle_start(self.enemy)
                 
