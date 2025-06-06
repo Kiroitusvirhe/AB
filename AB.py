@@ -172,15 +172,17 @@ class JackpotSkill(Skill):
 
 class GambleSkill(Skill):
     def __init__(self):
-        super().__init__("Gamble", "Chance to win gold or lose HP. Odds improve with luck.", cooldown=7.0)
-    def use(self, player):
-        # Each luck point gives +3% win chance (capped at 80%)
+        super().__init__("Gamble", "", cooldown=7.0)  # Leave description blank
+
+    def get_description(self, player):
         win_chance = min(0.5 + 0.03 * player.luck, 0.8)
         lose_chance = 1.0 - win_chance
-        self.description = (
-            f"{int(win_chance*100)}%: gain 10 gold, {int(lose_chance*100)}%: lose 5 HP. "
-            "Odds improve with luck."
-        )
+        return f"{int(win_chance*100)}%: gain 10 gold, {int(lose_chance*100)}%: lose 5 HP."
+
+    def use(self, player):
+        win_chance = min(0.5 + 0.03 * player.luck, 0.8)
+        lose_chance = 1.0 - win_chance
+        self.description = self.get_description(player)
         if random.random() < win_chance:
             player.gold += 10
             result = "win 10 gold!"
@@ -550,6 +552,7 @@ class Enemy(Entity):
         if enemy_type == 'basic':
             char = 'E'
             super().__init__(x, char)
+            self.dead = False
             self.hp = int(8 * hp_scale)
             self.max_hp = self.hp
             self.attack = int(2 * atk_scale)
@@ -1075,8 +1078,10 @@ class Renderer:
                     # Place enemies at fixed intervals from the right
                     spacing = 4
                     for idx, enemy in enumerate(enemies):
+                        if getattr(enemy, "dead", False):
+                            continue  # Skip dead enemies
                         ex = self.width - 5 - idx * spacing
-                        enemy.x = ex  # <--- Add this line!
+                        enemy.x = ex
                         if 0 <= ex < self.width:
                             line[ex] = enemy.char
                 print('|' + ''.join(line) + '|', end='')
@@ -1340,19 +1345,27 @@ class Announcements:
                     return
             time.sleep(0.08)
 
-    def skill_learn_screen(self, player, skill_classes):
+    def skill_learn_screen(self, player, skill_classes, battle_log_lines=None):
         selected = 0
         while True:
             lines = ["LEVEL UP! Choose a new skill:"]
             for i, skill_cls in enumerate(skill_classes):
                 prefix = "-> " if i == selected else "   "
-                name = skill_cls().name
-                desc = skill_cls().description
-                lines.append(f"{prefix}{i+1}. {name}")
+                skill_instance = skill_cls()
+                if hasattr(skill_instance, "get_description"):
+                    desc = skill_instance.get_description(player)
+                else:
+                    desc = skill_instance.description
+                lines.append(f"{prefix}{i+1}. {skill_instance.name}")
                 lines.append(f"      {desc}")
             lines.append("Press 1-3, arrows, Enter or Space to select.")
             message = "\n".join(lines)
-            self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+            self.renderer.render(
+                player, self.room, self.ui,
+                intro_message=message,
+                room_number=self.current_room,
+                battle_log_lines=battle_log_lines  # <-- Add this
+            )
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'1', b'2', b'3']:
@@ -1368,7 +1381,12 @@ class Announcements:
         # Actually add the skill
         new_skill = skill_classes[selected]()
         player.skills.append(new_skill)
-        self.wait_for_space(f"You learned {new_skill.name}!", show_player=True, room_number=self.current_room)
+        self.wait_for_space(
+            f"You learned {new_skill.name}!",
+            show_player=True,
+            room_number=self.current_room,
+            battle_log_lines=battle_log_lines  # <-- Add this
+        )
 
 # --- Animations Class ---
 class Animations:
@@ -1801,15 +1819,17 @@ class Battle:
                 self.renderer.render(
                     player, self.room, self.ui,
                     boss_info_lines=self.ui.get_enemy_stats_lines(main_enemy, self.room.height),
-                    battle_log_lines=battle_log[-6:]  # <-- Add this line
+                    battle_log_lines=battle_log[-6:],
+                    room_number=self.current_room
                 )
 
             # --- Check for win/lose ---
             if all(e.hp <= 0 for e in enemies):
                 if hasattr(self, 'animations') and self.animations:
                     for enemy in enemies:
-                        if enemy.hp <= 0:
+                        if enemy.hp <= 0 and not getattr(enemy, "dead", False):
                             self.animations.death(enemy, battle_log_lines=battle_log[-6:])
+                            enemy.dead = True
                 self.renderer.enemy = None
                 leveled_up = player.gain_xp(8 + 2 * self.current_room)
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
@@ -1821,8 +1841,7 @@ class Battle:
                         available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
                         if available_skills:
                             choices = random.sample(available_skills, min(3, len(available_skills)))
-                            self.announcements.skill_learn_screen(player, choices)
-                # Loot logic (unchanged for now)
+                            self.announcements.skill_learn_screen(player, choices, battle_log_lines=battle_log[-6:])
                 if original_stats:
                     for stat, value in original_stats.items():
                         setattr(player, stat, value)
