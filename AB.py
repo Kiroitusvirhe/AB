@@ -290,16 +290,16 @@ class LeadFeetSkill(Skill):
 
 class BloodPactSkill(Skill):
     def __init__(self):
-        super().__init__("Blood Pact", "+1 attack speed, -15 max HP (permanent).", cooldown=0.0)
+        super().__init__("Blood Pact", "2x attack speed, -15 max HP (permanent).", cooldown=0.0)
     def use(self, player):
         if "BloodPactSkill" in player.permanent_skills_used:
             return None
-        player.attack_speed += 1
+        player.attack_speed *= 2  # Double the attack speed
         player.max_hp = max(1, player.max_hp - 15)
         player.hp = min(player.hp, player.max_hp)
         player.permanent_skills_used.add("BloodPactSkill")
         self.cooldown_timer = 0.0
-        return "BLOOD PACT! +1 atk spd, -15 max HP!"
+        return "BLOOD PACT! 2x atk spd, -15 max HP!"
     
 class BlindingFlashSkill(Skill):
     def __init__(self):
@@ -1451,7 +1451,7 @@ class Animations:
                 room_number=self.current_room,
                 enemies=enemies
             )
-            time.sleep(0.8)
+            time.sleep(0.6)
         finally:
             self.room.get_landscape_line = old_get_landscape_line
         self.renderer.render(
@@ -1488,7 +1488,7 @@ class Animations:
                 room_number=self.current_room,
                 enemies=enemies
             )
-            time.sleep(0.8)
+            time.sleep(0.6)
         finally:
             self.room.get_landscape_line = old_get_landscape_line
         self.renderer.render(
@@ -1573,7 +1573,7 @@ class Animations:
                 room_number=self.current_room,
                 enemies=enemies
             )
-            time.sleep(0.8)
+            time.sleep(0.6)
         finally:
             self.room.get_landscape_line = old_get_landscape_line
         self.renderer.render(
