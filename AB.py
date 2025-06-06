@@ -312,7 +312,16 @@ class BlindingFlashSkill(Skill):
         self.cooldown_timer = 0.0
         return "BLINDING FLASH! All enemies are stunned for 1 turn!"
 
-
+class ScholarSkill(Skill):
+    def __init__(self):
+        super().__init__("Scholar", "+30% XP gain (permanent).", cooldown=0.0)
+    def use(self, player):
+        if "ScholarSkill" in player.permanent_skills_used:
+            return None
+        player.xp_gain_multiplier = getattr(player, "xp_gain_multiplier", 1.0) * 1.3
+        player.permanent_skills_used.add("ScholarSkill")
+        self.cooldown_timer = 0.0
+        return "SCHOLAR! +30% XP gain!"
 
 SKILL_POOL = [
     ThornBurstSkill,
@@ -336,6 +345,7 @@ SKILL_POOL = [
     LeadFeetSkill,
     BloodPactSkill,
     BlindingFlashSkill,
+    ScholarSkill,
     # Add more pool skills here as you create them
 ]    
     
@@ -376,10 +386,13 @@ class Player(Entity):
         self.skills = []
         self.timed_effects = {}  # e.g. {"crit_shield": {"value": 10, "timer": 3.0}}
         self.permanent_skills_used = set()
+        self.boss_xp_bonus = 1.0
 
     def gain_xp(self, amount):
         leveled_up = False
-        self.xp += amount
+        skill_mult = getattr(self, "xp_gain_multiplier", 1.0)
+        boss_mult = getattr(self, "boss_xp_bonus", 1.0)
+        self.xp += int(amount * skill_mult * boss_mult)
         while self.xp >= self.xp_to_next:
             self.xp -= self.xp_to_next
             self.level += 1
@@ -2081,6 +2094,8 @@ class Game:
                     # --- Mark boss as defeated if this was a boss room ---
                     if boss_room and boss_to_spawn and not final_boss_ready:
                         self.bosses_defeated.add(boss_to_spawn)
+                        # Add stacking 30% XP bonus
+                        self.player.boss_xp_bonus *= 1.3
 
                     # --- Luck-based loot chance ---
                     base_chance = 0.20
