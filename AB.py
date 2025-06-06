@@ -1070,14 +1070,11 @@ class Renderer:
                     # Use the enemies argument passed to render
                     if enemies is None:
                         enemies = [self.enemy] if self.enemy else []
-                    spacing = 4
-                    for idx, enemy in enumerate(enemies):
+                    for enemy in enemies:
                         if getattr(enemy, "dead", False):
                             continue  # Skip dead enemies
-                        ex = self.width - 5 - idx * spacing
-                        enemy.x = ex
-                        if 0 <= ex < self.width:
-                            line[ex] = enemy.char
+                        if 0 <= enemy.x < self.width:
+                            line[enemy.x] = enemy.char
                 print('|' + ''.join(line) + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
 
