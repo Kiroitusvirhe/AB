@@ -10,6 +10,7 @@ PLAYER_START_X = WIDTH * 1 // 4  # Player starts at 1/4th of the width, mirrorin
 
 class Skill:
     """Base class for all skills."""
+    char = '?'
     def __init__(self, name, description, cooldown):
         self.name = name
         self.description = description
@@ -21,6 +22,7 @@ class Skill:
         return None
 
 class BigSlashSkill(Skill):
+    char = 'S'
     def __init__(self):
         super().__init__("Big Slash", "Deal double damage to all enemies.", cooldown=8.0)
 
@@ -36,6 +38,7 @@ class BigSlashSkill(Skill):
         return None
 
 class DoubleAttackSkill(Skill):
+    char = 'D'
     def __init__(self):
         super().__init__("Double Attack", "Attack twice with bonus crit chance.", cooldown=6.0)
 
@@ -58,6 +61,7 @@ class DoubleAttackSkill(Skill):
         return None
 
 class BlessingLightSkill(Skill):
+    char = 'L'
     def __init__(self):
         super().__init__("Blessing Light", "Heal 10% of max HP.", cooldown=12.0)
 
@@ -70,6 +74,7 @@ class BlessingLightSkill(Skill):
         return None
     
 class ThornBurstSkill(Skill):
+    char = 'T'
     def __init__(self):
         super().__init__("Thorn Burst", "Deal your thorn damage to all enemies.", cooldown=7.0)
     def use(self, player, enemies):
@@ -79,6 +84,7 @@ class ThornBurstSkill(Skill):
         return f"THORN BURST! {player.thorn_damage:.0f} dmg to all!"
 
 class LuckyStrikeSkill(Skill):
+    char = '$'
     def __init__(self):
         super().__init__("Lucky Strike", "Deal bonus damage equal to your luck.", cooldown=6.0)
     def use(self, player, enemy):
@@ -88,6 +94,7 @@ class LuckyStrikeSkill(Skill):
         return f"LUCKY STRIKE! {enemy.char} takes {damage:.0f} dmg!"
 
 class RegenWaveSkill(Skill):
+    char = 'R'
     def __init__(self):
         super().__init__("Regen Wave", "Heal for 2x your regen.", cooldown=8.0)
     def use(self, player):
@@ -97,6 +104,7 @@ class RegenWaveSkill(Skill):
         return f"REGEN WAVE! Heal {heal:.0f} HP!"
 
 class CritShieldSkill(Skill):
+    char = '#'
     def __init__(self):
         super().__init__("Shield Wall", "Shield: 3x your defence for 3s.", cooldown=10.0)
     def use(self, player):
@@ -109,6 +117,7 @@ class CritShieldSkill(Skill):
             return "SHIELD WALL is active!"
 
 class LifestealNovaSkill(Skill):
+    char = 'N'
     def __init__(self):
         super().__init__("Lifesteal Nova", "Hit all enemies, heal for total dealt.", cooldown=9.0)
     def use(self, player, enemies):
@@ -125,6 +134,7 @@ class LifestealNovaSkill(Skill):
         return f"LIFESTEAL NOVA! {player.attack:.0f} dmg to all, heal {total:.0f}!"
 
 class CounterDodgeSkill(Skill):
+    char = 'C'
     def __init__(self):
         super().__init__("Counter Dodge", "Dodging has a 50% chance to counterattack.", cooldown=0.0)
     def use(self, player):
@@ -132,6 +142,7 @@ class CounterDodgeSkill(Skill):
         return None
 
 class GoldRushSkill(Skill):
+    char = 'G'
     def __init__(self):
         super().__init__("Gold Rush", "Gain 2 gold every 8s.", cooldown=8.0)
     def use(self, player):
@@ -140,6 +151,7 @@ class GoldRushSkill(Skill):
         return f"GOLD RUSH! You gain 2 gold!"
 
 class GuaranteedCritSkill(Skill):
+    char = '!'
     def __init__(self):
         super().__init__("Sure Crit", "Next attack is a guaranteed crit.", cooldown=7.0)
     def use(self, player, enemy):
@@ -149,6 +161,7 @@ class GuaranteedCritSkill(Skill):
         return f"SURE CRIT! {enemy.char} takes {damage:.0f} CRIT dmg!"
 
 class AdrenalineRushSkill(Skill):
+    char = 'A'
     def __init__(self):
         super().__init__("Adrenaline Rush", "+50% attack speed for 3s.", cooldown=10.0)
     def use(self, player):
@@ -162,6 +175,7 @@ class AdrenalineRushSkill(Skill):
             return "ADRENALINE already active!"
 
 class JackpotSkill(Skill):
+    char = 'J'
     def __init__(self):
         super().__init__("Jackpot", "Gain gold equal to your luck.", cooldown=10.0)
     def use(self, player):
@@ -171,6 +185,7 @@ class JackpotSkill(Skill):
         return f"JACKPOT! You gain {gold} gold!"
 
 class GambleSkill(Skill):
+    char = '?'
     def __init__(self):
         super().__init__("Gamble", "", cooldown=7.0)  # Leave description blank
 
@@ -193,6 +208,7 @@ class GambleSkill(Skill):
         return f"GAMBLE! You {result}"
 
 class GlassCannonSkill(Skill):
+    char = 'g'
     def __init__(self):
         super().__init__("Glass Cannon", "+3 atk, -10 max HP (permanent).", cooldown=0.0)
     def use(self, player):
@@ -206,6 +222,7 @@ class GlassCannonSkill(Skill):
         return "GLASS CANNON! +3 atk, -10 max HP!"
 
 class ClumsySwingSkill(Skill):
+    char = 'Z'
     def __init__(self):
         super().__init__("Clumsy Swing", "2x dmg, 30% chance to miss.", cooldown=8.0)
     def use(self, player, enemy):
@@ -218,6 +235,7 @@ class ClumsySwingSkill(Skill):
         return f"CLUMSY SWING! {enemy.char} takes {damage:.0f} dmg!"
 
 class UnstablePowerSkill(Skill):
+    char = 'U'
     def __init__(self):
         super().__init__("Unstable Power", "2x atk (1 turn), then 0.5x atk (2 turns).", cooldown=10.0)
     def use(self, player):
@@ -230,6 +248,7 @@ class UnstablePowerSkill(Skill):
             return "UNSTABLE POWER already active!"
 
 class InvincibleSkill(Skill):
+    char = 'I'
     def __init__(self):
         super().__init__("Invincible", "No damage taken for 2s.", cooldown=12.0)
     def use(self, player):
@@ -241,6 +260,7 @@ class InvincibleSkill(Skill):
             return "INVINCIBLE already active!"
 
 class IronWillSkill(Skill):
+    char = 'W'
     def __init__(self):
         super().__init__("Iron Will", "+10 max HP (permanent).", cooldown=0.0)
     def use(self, player):
@@ -253,6 +273,7 @@ class IronWillSkill(Skill):
         return "IRON WILL! +10 max HP!"
 
 class SharpenedMindSkill(Skill):
+    char = 'M'
     def __init__(self):
         super().__init__("Sharpened Mind", "+1 attack (permanent).", cooldown=0.0)
     def use(self, player):
@@ -264,6 +285,7 @@ class SharpenedMindSkill(Skill):
         return "SHARPENED MIND! +1 attack!"
 
 class CowardsGraceSkill(Skill):
+    char = 'V'
     def __init__(self):
         super().__init__("Coward's Grace", "+10% dodge, -5 max HP (permanent).", cooldown=0.0)
     def use(self, player):
@@ -277,6 +299,7 @@ class CowardsGraceSkill(Skill):
         return "COWARD'S GRACE! +10% dodge, -5 max HP!"
 
 class LeadFeetSkill(Skill):
+    char = 'F'
     def __init__(self):
         super().__init__("Lead Feet", "+5 defence, -10% dodge (permanent).", cooldown=0.0)
     def use(self, player):
@@ -289,6 +312,7 @@ class LeadFeetSkill(Skill):
         return "LEAD FEET! +5 def, -10% dodge!"
 
 class BloodPactSkill(Skill):
+    char = 'P'
     def __init__(self):
         super().__init__("Blood Pact", "2x attack speed, -15 max HP (permanent).", cooldown=0.0)
     def use(self, player):
@@ -302,6 +326,7 @@ class BloodPactSkill(Skill):
         return "BLOOD PACT! 2x atk spd, -15 max HP!"
     
 class BlindingFlashSkill(Skill):
+    char = 'B'
     def __init__(self):
         super().__init__("Blinding Flash", "All enemies skip their next attack.", cooldown=10.0)
     def use(self, player, enemies):
@@ -313,6 +338,7 @@ class BlindingFlashSkill(Skill):
         return "BLINDING FLASH! All enemies are stunned for 1 turn!"
 
 class ScholarSkill(Skill):
+    char = 'S'
     def __init__(self):
         super().__init__("Scholar", "+30% XP gain (permanent).", cooldown=0.0)
     def use(self, player):
@@ -1069,6 +1095,7 @@ class Renderer:
         term_size = shutil.get_terminal_size((80, 24))
         pad_left = (term_size.columns - (self.width + 2 + stats_col_width + boss_col_width)) // 2
 
+        # --- Skill icons rendering ---
         stats_lines = ui.get_player_stats_lines(player, self.height)
         if boss_info_lines is None:
             boss_info_lines = [''] * self.height
@@ -1080,26 +1107,35 @@ class Renderer:
 
         for y in range(self.height):
             print(' ' * pad_left + '|' + stats_lines[y].ljust(stats_col_width), end='')
-            line = room.get_landscape_line(y)
-            if intro_message and (self.height // 2 - 2) <= y < (self.height // 2 - 2) + len(intro_message.split('\n')):
-                lines = intro_message.split('\n')
-                idx = y - (self.height // 2 - 2)
-                msg = lines[idx] if idx < len(lines) else ''
-                print('|' + msg.center(self.width) + '|', end='')
+            if y == 0:
+                # Always draw skill icons on the first line
+                skill_chars = [getattr(skill, 'char', '?') for skill in getattr(player, 'skills', [])]
+                icons_per_row = self.width
+                skill_line = ''.join(skill_chars[:icons_per_row]).ljust(self.width)
+                print('|' + skill_line + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
             else:
-                if y == self.height - 1:
-                    # Draw player
-                    if 0 <= player.x < self.width:
-                        line[player.x] = player.char
-                    # Use the enemies argument passed to render
-                    if enemies is None:
-                        enemies = [self.enemy] if self.enemy else []
-                    for enemy in enemies:
-                        if getattr(enemy, "dead", False):
-                            continue  # Skip dead enemies
-                        if 0 <= enemy.x < self.width:
-                            line[enemy.x] = enemy.char
+                line = room.get_landscape_line(y)
+                if intro_message is not None:
+                    # Draw the message box in the game area, starting from line 1
+                    message_lines = intro_message.split('\n')
+                    msg_start = (self.height - len(message_lines)) // 2
+                    if msg_start <= y < msg_start + len(message_lines):
+                        line = list(message_lines[y - msg_start].center(self.width))
+                    else:
+                        line = [' '] * self.width
+                else:
+                    if y == self.height - 1:
+                        # Draw player and enemies
+                        if 0 <= player.x < self.width:
+                            line[player.x] = player.char
+                        if enemies is None:
+                            enemies = [self.enemy] if self.enemy else []
+                        for enemy in enemies:
+                            if getattr(enemy, "dead", False):
+                                continue
+                            if 0 <= enemy.x < self.width:
+                                line[enemy.x] = enemy.char
                 print('|' + ''.join(line) + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
 
