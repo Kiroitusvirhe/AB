@@ -194,16 +194,16 @@ class GambleSkill(Skill):
 
 class GlassCannonSkill(Skill):
     def __init__(self):
-        super().__init__("Glass Cannon", "+5 atk, -10 max HP (permanent).", cooldown=0.0)
+        super().__init__("Glass Cannon", "+3 atk, -10 max HP (permanent).", cooldown=0.0)
     def use(self, player):
         if "GlassCannonSkill" in player.permanent_skills_used:
             return None
-        player.attack += 5
+        player.attack += 3
         player.max_hp = max(1, player.max_hp - 10)
         player.hp = min(player.hp, player.max_hp)
         player.permanent_skills_used.add("GlassCannonSkill")
         self.cooldown_timer = 0.0
-        return "GLASS CANNON! +5 atk, -10 max HP!"
+        return "GLASS CANNON! +3 atk, -10 max HP!"
 
 class ClumsySwingSkill(Skill):
     def __init__(self):
@@ -290,16 +290,16 @@ class LeadFeetSkill(Skill):
 
 class BloodPactSkill(Skill):
     def __init__(self):
-        super().__init__("Blood Pact", "+2 attack, -10 max HP (permanent).", cooldown=0.0)
+        super().__init__("Blood Pact", "+1 attack speed, -15 max HP (permanent).", cooldown=0.0)
     def use(self, player):
         if "BloodPactSkill" in player.permanent_skills_used:
             return None
-        player.attack += 2
-        player.max_hp = max(1, player.max_hp - 10)
+        player.attack_speed += 1
+        player.max_hp = max(1, player.max_hp - 15)
         player.hp = min(player.hp, player.max_hp)
         player.permanent_skills_used.add("BloodPactSkill")
         self.cooldown_timer = 0.0
-        return "BLOOD PACT! +2 atk, -10 max HP!"
+        return "BLOOD PACT! +1 atk spd, -15 max HP!"
     
 class BlindingFlashSkill(Skill):
     def __init__(self):
