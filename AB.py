@@ -349,6 +349,41 @@ class ScholarSkill(Skill):
         self.cooldown_timer = 0.0
         return "SCHOLAR! +30% XP gain!"
 
+class QuickStepSkill(Skill):
+    char = 'Q'
+    def __init__(self):
+        super().__init__("Quick Step", "+10% dodge for first 5s of each battle.", cooldown=0.0)
+    def use(self, player):
+        if "QuickStepSkill" in player.permanent_skills_used:
+            return None
+        player.permanent_skills_used.add("QuickStepSkill")
+        # Passive, handled in battle logic
+        return "QUICK STEP! +10% dodge for first 5s of each battle!"
+
+class SteadyHandsSkill(Skill):
+    char = 'H'
+    def __init__(self):
+        super().__init__("Steady Hands", "-10% crit chance, +2 defence (permanent).", cooldown=0.0)
+    def use(self, player):
+        if "SteadyHandsSkill" in player.permanent_skills_used:
+            return None
+        player.crit_chance = max(0.0, player.crit_chance - 0.10)
+        player.defence += 2
+        player.permanent_skills_used.add("SteadyHandsSkill")
+        return "STEADY HANDS! -10% crit, +2 defence!"
+
+class HeavyHitterSkill(Skill):
+    char = 'Y'
+    def __init__(self):
+        super().__init__("Heavy Hitter", "First attack in each battle deals double damage.", cooldown=0.0)
+    def use(self, player):
+        if "HeavyHitterSkill" in player.permanent_skills_used:
+            return None
+        player.permanent_skills_used.add("HeavyHitterSkill")
+        # Passive, handled in battle logic
+        return "HEAVY HITTER! First attack in each battle deals double damage!"
+
+
 SKILL_POOL = [
     ThornBurstSkill,
     LuckyStrikeSkill,
@@ -372,8 +407,10 @@ SKILL_POOL = [
     BloodPactSkill,
     BlindingFlashSkill,
     ScholarSkill,
-    # Add more pool skills here as you create them
-]    
+    QuickStepSkill,   
+    SteadyHandsSkill,  
+    HeavyHitterSkill,  
+]  
     
 # --- Entity Classes ---
 class Entity:
@@ -643,6 +680,20 @@ class Enemy(Entity):
             self.thorn_damage = 0
             self.lifesteal = 0.0
             self.dodge_chance = min(0.02 * dodge_scale, 0.7)
+        elif enemy_type == 'brute':
+            char = 'B'
+            super().__init__(x, char)
+            self.hp = int(10 * (1 + 0.03 * (room_number - 1)))
+            self.max_hp = self.hp
+            self.attack = int(2 * (1 + 0.04 * (room_number - 1)))  # High damage
+            self.attack_speed = 0.5 * (1 + 0.01 * (room_number - 1))  # Slow attack speed
+            self.crit_chance = 0.08
+            self.crit_damage = 2.0
+            self.defence = int(0 * def_scale)
+            self.health_regen = 0
+            self.thorn_damage = 0
+            self.lifesteal = 0.0
+            self.dodge_chance = min(0.03 * dodge_scale, 0.7)
         else:
             char = '?'
             super().__init__(x, char)
@@ -1653,8 +1704,13 @@ class Battle:
         self.room = room
         self.current_room = 1  # Will be set by Game
 
-    def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None):
+    def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None, first_attack=False):
         messages = []
+        # --- Heavy Hitter logic ---
+        heavy_hitter_active = False
+        if first_attack and isinstance(attacker, Player) and "HeavyHitterSkill" in getattr(attacker, "permanent_skills_used", set()):
+            heavy_hitter_active = True
+
         # Play slash/crit/dodge animation if available
         if hasattr(self, 'animations') and self.animations:
             # Dodge check first
@@ -1673,9 +1729,13 @@ class Battle:
             if random.random() < attacker.crit_chance:
                 damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
                 crit = True
+                if heavy_hitter_active:
+                    damage *= 2
                 self.animations.crit_effect(attacker, boss_info_lines, battle_log_lines)
             else:
                 damage = max(1, attacker.attack - defender.defence)
+                if heavy_hitter_active:
+                    damage *= 2
                 self.animations.slash(attacker, defender, boss_info_lines, battle_log_lines)
         else:
             # No animations
@@ -1685,8 +1745,12 @@ class Battle:
             if random.random() < attacker.crit_chance:
                 damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
                 crit = True
+                if heavy_hitter_active:
+                    damage *= 2
             else:
                 damage = max(1, attacker.attack - defender.defence)
+                if heavy_hitter_active:
+                    damage *= 2
 
         # --- Cumulative lifesteal logic ---
         if hasattr(attacker, "lifesteal") and attacker.lifesteal > 0:
@@ -1758,6 +1822,16 @@ class Battle:
                     setattr(player, stat, getattr(player, stat) + 1)
             player.stat_boosts.clear()
 
+        # --- Quick Step logic ---
+        quick_step_active = False
+        quick_step_timer = 0.0
+        if "QuickStepSkill" in getattr(player, "permanent_skills_used", set()):
+            player.dodge_chance = min(0.7, player.dodge_chance + 0.10)
+            quick_step_active = True
+            quick_step_timer = 5.0
+
+        first_attack_done = False
+
         while player.hp > 0 and any(e.hp > 0 for e in enemies) and running_flag():
             acted = False
 
@@ -1766,8 +1840,6 @@ class Battle:
 
             for skill in player.skills:
                 skill.cooldown_timer += time_step
-
-
 
             # --- Timed effects update (add this here) ---
             to_remove = []
@@ -1779,6 +1851,13 @@ class Battle:
                 if effect == "adrenaline":
                     player.attack_speed -= player.timed_effects[effect]["value"]
                 del player.timed_effects[effect]
+
+            # --- Quick Step timer update ---
+            if quick_step_active:
+                quick_step_timer -= time_step
+                if quick_step_timer <= 0:
+                    player.dodge_chance = max(0.0, player.dodge_chance - 0.10)
+                    quick_step_active = False
 
             skill_log = None
             skill_name = None
@@ -1847,14 +1926,18 @@ class Battle:
             # --- Player attacks a random living enemy ---
             if clock >= player_next_attack and living_enemies:
                 target = random.choice(living_enemies)
+                is_first_attack = not first_attack_done
                 msgs = self.attack(
                     player, target,
                     boss_info_lines=self.ui.get_enemy_stats_lines(target, self.room.height),
-                    battle_log_lines=battle_log[-6:]
+                    battle_log_lines=battle_log[-6:],
+                    first_attack=is_first_attack
                 )
                 battle_log.extend(msgs)
                 player_next_attack += 1.0 / player.attack_speed
                 acted = True
+                if is_first_attack:
+                    first_attack_done = True
 
             # --- Each enemy attacks independently ---
             for idx, enemy in enumerate(enemies):
@@ -1984,22 +2067,28 @@ class Game:
         enemies = []
         room = self.current_room
         # Main enemy (always strongest, at current room level)
-        main_enemy_type = random.choice(['basic', 'speedy', 'tough'])
+        main_enemy_type = random.choice(['basic', 'speedy', 'tough', 'brute'])
         main_enemy = Enemy(x=(WIDTH * 3) // 4, enemy_type=main_enemy_type, room_number=room)
         enemies.append(main_enemy)
 
         # Only add extra enemies for rooms > 10
         if room > 10:
-            max_extra = 4  # Arbitrary cap, adjust as needed
+            # Gradually ramp up max extra enemies
+            if room < 15:
+                max_extra = 1
+            elif room < 20:
+                max_extra = 2
+            elif room < 25:
+                max_extra = 3
+            else:
+                max_extra = 4
             for i in range(1, max_extra + 1):
-                chance = min(0.04 * (room - 10), 0.40)  # 1% per room after 10, capped at 40%
+                chance = min(0.04 * (room - 10), 0.40)  # 4% per room after 10, capped at 40%
                 if random.random() < chance:
-                    # Each extra enemy is based on an earlier room (further back for each extra)
                     weaker_room = max(1, room - 2 * i)
-                    enemy_type = random.choice(['basic', 'speedy', 'tough'])
+                    enemy_type = random.choice(['basic', 'speedy', 'tough', 'brute'])
                     x_pos = (WIDTH * 3) // 4 - i * 2
-                    # Weaken extra enemies: halve their HP and attack
-                    extra_enemy = Enemy(x=x_pos, enemy_type=enemy_type, room_number=weaker_room)
+                    extra_enemy = Enemy(x_pos, enemy_type=enemy_type, room_number=weaker_room)
                     extra_enemy.hp = max(1, int(extra_enemy.hp * 0.6))
                     extra_enemy.max_hp = extra_enemy.hp
                     extra_enemy.attack = max(1, int(extra_enemy.attack * 0.7))
@@ -2096,7 +2185,8 @@ class Game:
                             self.boss_probability = 0.0  # Only reset here!
                 else:
                     self.boss_probability = 0.0
-
+                if self.current_room >= 10 and not boss_room and not final_boss_ready:
+                    self.boss_probability += 0.005
                 self.reset_player_position()
 
                 # --- Spawn boss or normal enemies ---
@@ -2192,9 +2282,6 @@ class Game:
 
                 if self.input_handler.quit:
                     return
-                
-            if self.current_room >= 10 and not boss_room and not final_boss_ready:
-                self.boss_probability += 0.005
 
     def show_shop(self):
         healing_potion_cls = random.choice([SmallHealingPotion, MediumHealingPotion, MaxHealingPotion])
