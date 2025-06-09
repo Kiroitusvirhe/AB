@@ -757,15 +757,15 @@ class FinalBoss(BossEnemy):
     def __init__(self, x, room_number=1):
         super().__init__(x, name="??? FINAL BOSS ???", room_number=room_number)
         self.char = 'F'
-        self.hp = int(120 + 10 * room_number)
+        self.hp = int(50 + 10 * room_number)
         self.max_hp = self.hp
-        self.attack = 8 + room_number // 2
-        self.attack_speed = 1.2
+        self.attack = 4 + room_number // 10
+        self.attack_speed = 1.4
         self.crit_chance = 0.25
         self.crit_damage = 2.5
         self.defence = 8 + room_number // 8
-        self.health_regen = 3 + room_number // 10
-        self.thorn_damage = 3
+        self.health_regen = 3 + room_number // 15
+        self.thorn_damage = 0
         self.lifesteal = 0.15
         self.dodge_chance = 0.15
         self.summon_cooldown = 8.0  # seconds
@@ -2448,6 +2448,7 @@ class Game:
                         event_chance = event_base_chance + luck_bonus
                         if random.random() < event_chance:
                             self.event_rooms.random_event()
+                            self.animations.player_slide_and_disappear()
                             continue  # Skip battle for this room, go to next
                     self.spawn_enemies()
 
