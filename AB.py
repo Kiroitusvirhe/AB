@@ -2110,6 +2110,7 @@ class Game:
         self.bosses_encountered = set()  # Track which bosses have been fought
         self.bosses_defeated = set()     # Track which bosses have been defeated
         self.boss_classes = [RegenBoss, LifestealBoss]
+        self.final_boss_ready = False
         
         # Link room number to other classes
         self.announcements.current_room = self.current_room
@@ -2202,6 +2203,7 @@ class Game:
             self.reset_player_position()
 
             self.current_room = 1  # Reset room counter on new game
+            self.final_boss_ready = False
 
             # Give the player a Small Healing Potion for testing
             self.player.potions[0] = SmallHealingPotion()
@@ -2238,13 +2240,16 @@ class Game:
                 final_boss_ready = False
 
                 if self.current_room >= 10:
-                    # If both regular bosses are defeated, spawn the final boss
+                    # If both regular bosses are defeated, start final boss countdown
                     if len(self.bosses_defeated) >= len(self.boss_classes):
-                        final_boss_ready = True
-                        boss_room = True
-                        boss_to_spawn = FinalBoss
-                        self.boss_probability = 0.0  # No more boss chance after this
-                    # Otherwise, normal boss logic
+                        if not getattr(self, "final_boss_ready", False):
+                            self.final_boss_ready = True
+                            self.boss_probability = 0.0  # Reset boss chance for final boss
+                        # Final boss logic (like regular bosses, but only after countdown)
+                        if self.final_boss_ready and random.random() < self.boss_probability:
+                            boss_room = True
+                            boss_to_spawn = FinalBoss
+                            self.boss_probability = 0.0
                     elif len(self.bosses_defeated) < len(self.boss_classes):
                         if random.random() < self.boss_probability:
                             boss_room = True
@@ -2256,7 +2261,9 @@ class Game:
                             self.boss_probability = 0.0  # Only reset here!
                 else:
                     self.boss_probability = 0.0
-                if self.current_room >= 11 and not boss_room and not final_boss_ready:
+
+                # Increment boss_probability for final boss countdown as well
+                if self.current_room >= 11 and not boss_room:
                     self.boss_probability += 0.01
                 self.reset_player_position()
 
