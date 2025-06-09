@@ -1054,6 +1054,162 @@ class Room:
     def get_landscape_line(self, y):
         return [' '] * self.width
 
+class EventRooms:
+    def __init__(self, game):
+        self.game = game  # Access to player, renderer, announcements, etc.
+
+    def upgrade_equipment_event(self):
+        player = self.game.player
+        eqs = [eq for eq in player.equipment_items if eq]
+        if not eqs:
+            self.game.announcements.wait_for_space("You find a magical forge, but you have no equipment to upgrade.", show_player=True, room_number=self.game.current_room)
+            return
+        lines = ["You find a magical forge! Upgrade one equipment:"]
+        for idx, eq in enumerate(eqs):
+            lines.append(f"{idx+1}. {eq.display_name()}")
+        lines.append("Press 1-4 to select, or SPACE to skip.")
+        self.game.renderer.render(player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'1', b'2', b'3', b'4']:
+                    slot = int(key) - 1
+                    if slot < len(eqs):
+                        eq = eqs[slot]
+                        # Choose upgrade type
+                        self.game.announcements.wait_for_space(f"Upgrade {eq.display_name()}:\n1. Level up (+1)\n2. Tier up\nPress 1 or 2.", show_player=True, room_number=self.game.current_room)
+                        while True:
+                            if msvcrt.kbhit():
+                                subkey = msvcrt.getch()
+                                if subkey == b'1':
+                                    eq.level += 1
+                                    self.game.announcements.wait_for_space(f"{eq.display_name()} leveled up!", show_player=True, room_number=self.game.current_room)
+                                    return
+                                elif subkey == b'2':
+                                    current_tier = eq.tier
+                                    idx = EQUIPMENT_TIERS.index(current_tier)
+                                    if idx < len(EQUIPMENT_TIERS) - 1:
+                                        eq.tier = EQUIPMENT_TIERS[idx + 1]
+                                        # Re-roll bonus stats for new tier
+                                        eq.__init__(eq.name, eq.level, eq.tier)
+                                        self.game.announcements.wait_for_space(f"{eq.display_name()} tier upgraded!", show_player=True, room_number=self.game.current_room)
+                                    else:
+                                        self.game.announcements.wait_for_space(f"{eq.display_name()} is already Legendary!", show_player=True, room_number=self.game.current_room)
+                                    return
+                                elif subkey == b' ':
+                                    return
+                            time.sleep(0.08)
+                    else:
+                        return
+                elif key == b' ':
+                    return
+            time.sleep(0.08)
+
+    def mystery_merchant(self):
+        lines = ["A mysterious merchant appears!"]
+        offer = random.choice([
+            ("Buy a random potion for 5 gold?", "potion"),
+            ("Buy a random equipment for 10 gold?", "equipment"),
+            ("Buy a stat boost (+1 random stat) for 8 gold?", "stat"),
+        ])
+        lines.append(offer[0])
+        lines.append("Press Y to buy, SPACE to ignore.")
+        self.game.renderer.render(self.game.player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'y', b'Y']:
+                    if offer[1] == "potion" and self.game.player.gold >= 5:
+                        self.game.player.gold -= 5
+                        potion_class = random.choice(HealingPotion.potion_classes)
+                        potion = potion_class()
+                        for i in range(4):
+                            if self.game.player.potions[i] is None:
+                                self.game.player.potions[i] = potion
+                                break
+                        else:
+                            self.game.announcements.potion_pickup_prompt(self.game.player, potion)
+                        self.game.announcements.wait_for_space("You bought a potion!", show_player=True, room_number=self.game.current_room)
+                    elif offer[1] == "equipment" and self.game.player.gold >= 10:
+                        self.game.player.gold -= 10
+                        eq_class = random.choice(Equipment.equipment_classes)
+                        eq = eq_class(level=1, tier=random_tier(self.game.player.luck))
+                        for i in range(4):
+                            if self.game.player.equipment_items[i] is None:
+                                self.game.player.equipment_items[i] = eq
+                                self.game.player.equip(eq)
+                                break
+                        else:
+                            self.game.announcements.equipment_pickup_prompt(self.game.player, eq)
+                        self.game.announcements.wait_for_space("You bought equipment!", show_player=True, room_number=self.game.current_room)
+                    elif offer[1] == "stat" and self.game.player.gold >= 8:
+                        self.game.player.gold -= 8
+                        stat = random.choice(["attack", "defence", "max_hp", "luck"])
+                        self.game.player.upgrade_stat(stat)
+                        self.game.announcements.wait_for_space(f"+1 {stat.replace('_',' ').title()}!", show_player=True, room_number=self.game.current_room)
+                    else:
+                        self.game.announcements.wait_for_space("Not enough gold!", show_player=True, room_number=self.game.current_room)
+                    break
+                elif key == b' ':
+                    break
+            time.sleep(0.08)
+
+    def trapped_chest(self):
+        lines = ["You find a suspicious chest...", "Open it? (Y/N)"]
+        self.game.renderer.render(self.game.player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'y', b'Y']:
+                    if random.random() < 0.5:
+                        gold = random.randint(5, 15)
+                        self.game.player.gold += gold
+                        self.game.announcements.wait_for_space(f"You found {gold} gold!", show_player=True, room_number=self.game.current_room)
+                    else:
+                        dmg = random.randint(5, 15)
+                        self.game.player.hp = max(1, self.game.player.hp - dmg)
+                        self.game.announcements.wait_for_space(f"It's a trap! You take {dmg} damage!", show_player=True, room_number=self.game.current_room)
+                    break
+                elif key in [b'n', b'N', b' ']:
+                    break
+            time.sleep(0.08)
+
+    def cursed_altar(self):
+        lines = ["A cursed altar beckons. Touch it? (Y/N)"]
+        self.game.renderer.render(self.game.player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'y', b'Y']:
+                    if random.random() < 0.5:
+                        stat = random.choice(["attack", "defence", "max_hp", "luck"])
+                        self.game.player.upgrade_stat(stat)
+                        self.game.announcements.wait_for_space(f"The curse empowers you! +1 {stat.replace('_',' ').title()}!", show_player=True, room_number=self.game.current_room)
+                    else:
+                        stat = random.choice(["attack", "defence", "max_hp"])
+                        self.game.player.downgrade_stat(stat)
+                        self.game.announcements.wait_for_space(f"The curse weakens you! -1 {stat.replace('_',' ').title()}!", show_player=True, room_number=self.game.current_room)
+                    break
+                elif key in [b'n', b'N', b' ']:
+                    break
+            time.sleep(0.08)
+
+    def random_event(self):
+        # Map event names to methods
+        event_methods = {
+            "mystery_merchant": self.mystery_merchant,
+            "trapped_chest": self.trapped_chest,
+            "cursed_altar": self.cursed_altar,
+            "upgrade_equipment_event": self.upgrade_equipment_event,
+        }
+        # Only include events not yet encountered
+        available = [name for name in event_methods if name not in self.game.encountered_events]
+        if not available:
+            return  # No events left, skip
+        chosen = random.choice(available)
+        self.game.encountered_events.add(chosen)
+        event_methods[chosen]()
+
 class UI:
     """Handles UI elements and stat formatting."""
     def __init__(self):
@@ -2111,6 +2267,8 @@ class Game:
         self.bosses_defeated = set()     # Track which bosses have been defeated
         self.boss_classes = [RegenBoss, LifestealBoss]
         self.final_boss_ready = False
+        self.event_rooms = EventRooms(self)
+        self.encountered_events = set()
         
         # Link room number to other classes
         self.announcements.current_room = self.current_room
@@ -2284,6 +2442,13 @@ class Game:
                             enemy=boss, show_player=True, room_number=self.current_room
                         )
                 else:
+                    if self.current_room > 5:
+                        event_base_chance = 0.05
+                        luck_bonus = (self.player.luck // 2) * 0.01  # +1% per 2 luck
+                        event_chance = event_base_chance + luck_bonus
+                        if random.random() < event_chance:
+                            self.event_rooms.random_event()
+                            continue  # Skip battle for this room, go to next
                     self.spawn_enemies()
 
                 self.announcements.current_room = self.current_room
@@ -2307,6 +2472,7 @@ class Game:
                         self.bosses_defeated.add(boss_to_spawn)
                         # Add stacking 30% XP bonus
                         self.player.boss_xp_bonus *= 1.3
+                        self.encountered_events.clear()
 
                     # --- Luck-based loot chance ---
                     base_chance = 0.20
