@@ -375,7 +375,7 @@ class SteadyHandsSkill(Skill):
 class HeavyHitterSkill(Skill):
     char = 'Y'
     def __init__(self):
-        super().__init__("Heavy Hitter", "First attack in each battle deals double damage.", cooldown=0.0)
+        super().__init__("Heavy Hitter", "First attack in each battle deals more damage.", cooldown=0.0)
     def use(self, player):
         if "HeavyHitterSkill" in player.permanent_skills_used:
             return None
@@ -1414,7 +1414,7 @@ class Renderer:
                         msg = message_lines[y - msg_start].center(self.width)
                         # Overlay the message on top of the line
                         for i, ch in enumerate(msg):
-                            if ch != ' ':
+                            if i < len(line) and ch != ' ':
                                 line[i] = ch
                 print('|' + ''.join(line) + '|', end='')
                 print(boss_info_lines[y].ljust(boss_col_width) + '|')
@@ -1744,6 +1744,23 @@ class Announcements:
             battle_log_lines=battle_log_lines
         )
 
+    def show_win_screen(self):
+        lines = [
+            "CONGRATULATIONS!",
+            "You have defeated the final boss!",
+            "",
+            "Press R to restart the game.",
+            "Press E to continue in Endless Mode."
+        ]
+        self.renderer.render(self.player, self.room, self.ui, intro_message="\n".join(lines), room_number=self.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'r', b'R']:
+                    return "reset"
+                elif key in [b'e', b'E']:
+                    return "endless"
+            time.sleep(0.08 * (1 / getattr(self, "game_speed", 1.0)))
 # --- Animations Class ---
 class Animations:
     """Handles all game animations (player slide, attacks, etc)."""
@@ -1978,12 +1995,12 @@ class Battle:
                 damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
                 crit = True
                 if heavy_hitter_active:
-                    damage *= 2
+                    damage = int(damage * 1.2)
                 self.animations.crit_effect(attacker, boss_info_lines, battle_log_lines, enemies=enemies,)
             else:
                 damage = max(1, attacker.attack - defender.defence)
                 if heavy_hitter_active:
-                    damage *= 2
+                    damage = int(damage * 1.2)
                 self.animations.slash(attacker, defender, boss_info_lines, battle_log_lines, enemies=enemies,)
         else:
             # No animations
@@ -1994,11 +2011,11 @@ class Battle:
                 damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
                 crit = True
                 if heavy_hitter_active:
-                    damage *= 2
+                    damage damage = int(damage * 1.2)
             else:
                 damage = max(1, attacker.attack - defender.defence)
                 if heavy_hitter_active:
-                    damage *= 2
+                    damage = int(damage * 1.2)
 
         # --- Cumulative lifesteal logic ---
         if hasattr(attacker, "lifesteal") and attacker.lifesteal > 0:
@@ -2083,6 +2100,12 @@ class Battle:
 
         while player.hp > 0 and any(e.hp > 0 for e in enemies) and running_flag():
             acted = False
+
+            # --- Ensure enemy_next_attack matches enemies ---
+            while len(enemy_next_attack) < len(enemies):
+                enemy_next_attack.append(clock)
+            while len(enemy_next_attack) > len(enemies):
+                enemy_next_attack.pop()
 
             # --- SKILL USAGE (automatic) ---
             player.update_skill_timer(time_step)
@@ -2310,6 +2333,8 @@ class Game:
         self.final_boss_ready = False
         self.event_rooms = EventRooms(self)
         self.encountered_events = set()
+        self.endless_loops = 0
+        self.difficulty_multiplier = 1.0
         
         # Link room number to other classes
         self.announcements.current_room = self.current_room
@@ -2366,6 +2391,12 @@ class Game:
                     enemies.append(extra_enemy)
                 else:
                     break  # Stop rolling if one fails
+        for enemy in enemies:
+            enemy.hp = int(enemy.hp * self.difficulty_multiplier)
+            enemy.max_hp = enemy.hp
+            enemy.attack = int(enemy.attack * self.difficulty_multiplier)
+            enemy.defence = int(enemy.defence * self.difficulty_multiplier)
+            enemy.health_regen = int(enemy.health_regen * self.difficulty_multiplier)
 
         self.enemies = enemies
         self.enemy = enemies[0]  # For compatibility with old code
@@ -2515,6 +2546,33 @@ class Game:
                         # Add stacking 30% XP bonus
                         self.player.boss_xp_bonus *= 1.3
                         self.encountered_events.clear()
+                    
+                    # Check for final boss defeat and handle win/endless
+                    if boss_room and boss_to_spawn == FinalBoss:
+                        if self.endless_loops == 0:
+                            choice = self.announcements.show_win_screen()
+                            if choice == "reset":
+                                self.__init__()
+                                break  # Exit inner loop, restart game
+                            elif choice == "endless":
+                                self.bosses_defeated.clear()
+                                self.bosses_encountered.clear()
+                                self.final_boss_ready = False
+                                self.boss_probability = 0.0
+                                self.encountered_events.clear()
+                                self.endless_loops += 1
+                                self.difficulty_multiplier += 0.2
+                                continue  # Continue to next room in endless mode
+                        else:
+                            # Endless mode: just reset bosses and increase difficulty, no prompt
+                            self.bosses_defeated.clear()
+                            self.bosses_encountered.clear()
+                            self.final_boss_ready = False
+                            self.boss_probability = 0.0
+                            self.encountered_events.clear()
+                            self.endless_loops += 1
+                            self.difficulty_multiplier += 0.2
+                            continue
 
                     # --- Luck-based loot chance ---
                     base_chance = 0.20
