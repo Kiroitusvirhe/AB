@@ -382,6 +382,17 @@ class HeavyHitterSkill(Skill):
         player.permanent_skills_used.add("HeavyHitterSkill")
         # Passive, handled in battle logic
         return "HEAVY HITTER! First attack in each battle deals double damage!"
+    
+class TreasureHunterSkill(Skill):
+    char = 'T'
+    def __init__(self):
+        super().__init__("Treasure Hunter", "+15% chance to find loot after battles (passive).", cooldown=0.0)
+    def use(self, player):
+        if "TreasureHunterSkill" in player.permanent_skills_used:
+            return None
+        player.loot_chance_bonus = getattr(player, "loot_chance_bonus", 0.0) + 0.15
+        player.permanent_skills_used.add("TreasureHunterSkill")
+        return "TREASURE HUNTER! +15% loot chance!"
 
 
 SKILL_POOL = [
@@ -409,7 +420,9 @@ SKILL_POOL = [
     ScholarSkill,
     QuickStepSkill,   
     SteadyHandsSkill,  
-    HeavyHitterSkill,  
+    HeavyHitterSkill,
+    TreasureHunterSkill,
+
 ]  
     
 # --- Entity Classes ---
@@ -717,7 +730,7 @@ class RegenBoss(BossEnemy):
         self.crit_chance = 0.12
         self.crit_damage = 2.0
         self.defence = 2 + room_number // 16
-        self.health_regen = 2 + room_number // 15
+        self.health_regen = 2 + room_number // 8
         self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
@@ -740,21 +753,40 @@ class LifestealBoss(BossEnemy):
         self.dodge_chance = 0.08
 
 class FinalBoss(BossEnemy):
-    """Absolutely broken placeholder final boss."""
+    """Balanced final boss that can summon minions."""
     def __init__(self, x, room_number=1):
         super().__init__(x, name="??? FINAL BOSS ???", room_number=room_number)
         self.char = 'F'
-        self.hp = 9999
+        self.hp = int(120 + 10 * room_number)
         self.max_hp = self.hp
-        self.attack = 999
-        self.attack_speed = 3.0
-        self.crit_chance = 0.99
-        self.crit_damage = 9.99
-        self.defence = 99
-        self.health_regen = 99
-        self.thorn_damage = 99
-        self.lifesteal = 0.99
-        self.dodge_chance = 0.7
+        self.attack = 8 + room_number // 2
+        self.attack_speed = 1.2
+        self.crit_chance = 0.25
+        self.crit_damage = 2.5
+        self.defence = 8 + room_number // 8
+        self.health_regen = 3 + room_number // 10
+        self.thorn_damage = 3
+        self.lifesteal = 0.15
+        self.dodge_chance = 0.15
+        self.summon_cooldown = 8.0  # seconds
+        self.summon_timer = 0.0
+
+    def update(self, dt, enemies, room_number):
+        # Summon minions every summon_cooldown seconds, up to 2 at a time
+        self.summon_timer += dt
+        if self.summon_timer >= self.summon_cooldown:
+            self.summon_timer = 0.0
+            minions = []
+            for _ in range(2):
+                minion_type = random.choice(['basic', 'speedy', 'tough', 'brute'])
+                minion = Enemy(x=random.randint(10, 50), enemy_type=minion_type, room_number=max(1, room_number - 5))
+                minion.hp = max(1, int(minion.hp * 0.5))
+                minion.max_hp = minion.hp
+                minion.attack = max(1, int(minion.attack * 0.6))
+                minions.append(minion)
+            enemies.extend(minions)
+            return f"{self.name} summons reinforcements!"
+        return None
         
 # --- Item Classes ---
 class Item:
@@ -1267,7 +1299,7 @@ class Announcements:
         self.input_handler = input_handler
         self.current_room = 1  # Will be set by Game
 
-    def wait_for_space(self, message, enemy=None, show_player=True, room_number=None, battle_log_lines=None):
+    def wait_for_space(self, message, enemy=None, show_player=True, room_number=None, battle_log_lines=None, enemies=None):
         self.input_handler.space_pressed = False
         self.renderer.enemy = enemy
         visible_x = 5  # Default visible position
@@ -1285,6 +1317,7 @@ class Announcements:
                 intro_message=message,
                 room_number=room_number if room_number is not None else getattr(self, 'current_room', 1),
                 battle_log_lines=battle_log_lines,
+                enemies=enemies,
             )
             self.input_handler.poll()
             time.sleep(0.05)
@@ -1401,7 +1434,7 @@ class Announcements:
                         log = player.potions[slot].use(player)
                         player.potions[slot] = None
                         # Show heal message, pass the enemy!
-                        self.wait_for_space(log, enemy=enemy, show_player=True, room_number=self.current_room)
+                        self.wait_for_space(log, enemy=enemy, show_player=True, room_number=self.current_room, enemies=enemies)
                 elif key == b' ':
                     break
             time.sleep(0.08)
@@ -1704,7 +1737,7 @@ class Battle:
         self.room = room
         self.current_room = 1  # Will be set by Game
 
-    def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None, first_attack=False):
+    def attack(self, attacker, defender, boss_info_lines=None, battle_log_lines=None, first_attack=False, enemies=None):
         messages = []
         # --- Heavy Hitter logic ---
         heavy_hitter_active = False
@@ -1715,7 +1748,7 @@ class Battle:
         if hasattr(self, 'animations') and self.animations:
             # Dodge check first
             if random.random() < defender.dodge_chance:
-                self.animations.dodge_effect(defender, boss_info_lines, battle_log_lines)
+                self.animations.dodge_effect(defender, boss_info_lines, battle_log_lines, enemies=enemies,)
                 msg = f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
                 # Counter Dodge logic
                 if hasattr(defender, "skills") and any(isinstance(skill, CounterDodgeSkill) for skill in defender.skills):
@@ -1731,12 +1764,12 @@ class Battle:
                 crit = True
                 if heavy_hitter_active:
                     damage *= 2
-                self.animations.crit_effect(attacker, boss_info_lines, battle_log_lines)
+                self.animations.crit_effect(attacker, boss_info_lines, battle_log_lines, enemies=enemies,)
             else:
                 damage = max(1, attacker.attack - defender.defence)
                 if heavy_hitter_active:
                     damage *= 2
-                self.animations.slash(attacker, defender, boss_info_lines, battle_log_lines)
+                self.animations.slash(attacker, defender, boss_info_lines, battle_log_lines, enemies=enemies,)
         else:
             # No animations
             if random.random() < defender.dodge_chance:
@@ -1859,6 +1892,13 @@ class Battle:
                     player.dodge_chance = max(0.0, player.dodge_chance - 0.10)
                     quick_step_active = False
 
+            # --- Final Boss Summon Skill ---
+            for enemy in enemies:
+                if isinstance(enemy, FinalBoss):
+                    summon_msg = enemy.update(time_step, enemies, self.current_room)
+                    if summon_msg:
+                        battle_log.append(summon_msg)
+
             skill_log = None
             skill_name = None
             living_enemies = [e for e in enemies if e.hp > 0]
@@ -1918,7 +1958,8 @@ class Battle:
                             self.animations.skill_effect(
                                 anim_name, player,
                                 boss_info_lines=self.ui.get_enemy_stats_lines(living_enemies[0] if living_enemies else None, self.room.height),
-                                battle_log_lines=battle_log[-6:]
+                                battle_log_lines=battle_log[-6:],
+                                enemies=enemies,
                             )
                         battle_log.append(skill_log)
                         acted = True
@@ -1931,7 +1972,8 @@ class Battle:
                     player, target,
                     boss_info_lines=self.ui.get_enemy_stats_lines(target, self.room.height),
                     battle_log_lines=battle_log[-6:],
-                    first_attack=is_first_attack
+                    first_attack=is_first_attack,
+                    enemies=enemies
                 )
                 battle_log.extend(msgs)
                 player_next_attack += 1.0 / player.attack_speed
@@ -1948,7 +1990,8 @@ class Battle:
                     msgs = self.attack(
                         enemy, player,
                         boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
-                        battle_log_lines=battle_log[-6:]
+                        battle_log_lines=battle_log[-6:],
+                        enemies=enemies
                     )
                     battle_log.extend(msgs)
                     enemy_next_attack[idx] += 1.0 / enemy.attack_speed
@@ -1966,10 +2009,18 @@ class Battle:
                     player.regen_timer = 0.0
             for enemy in enemies:
                 if enemy.health_regen > 0 and int(clock * 10) % 10 == 0:
-                    healed = min(enemy.health_regen, enemy.max_hp - enemy.hp)
-                    if healed > 0:
-                        enemy.hp += healed
-                        battle_log.append(f"{enemy.char} regenerates {healed} HP!")
+                    for enemy in enemies:
+                        if not hasattr(enemy, "regen_timer"):
+                            enemy.regen_timer = 0.0
+                        if enemy.health_regen > 0:
+                            interval = regen_base_interval * (0.95 ** (enemy.health_regen - 1))
+                            enemy.regen_timer += time_step
+                            if enemy.regen_timer >= interval:
+                                healed = min(1, enemy.max_hp - enemy.hp)
+                                if healed > 0:
+                                    enemy.hp += healed
+                                    battle_log.append(f"{enemy.char} regenerates {healed} HP!")
+                                enemy.regen_timer = 0.0
 
             # --- Render ---
             if acted or int(clock * 10) % 2 == 0:
@@ -2234,6 +2285,7 @@ class Game:
                     base_chance = 0.20
                     luck_bonus = (self.player.luck // 2) * 0.01  # +1% per 2 luck
                     loot_chance = base_chance + luck_bonus
+                    loot_chance += getattr(self.player, "loot_chance_bonus", 0.0)
 
                     found_items = []
                     if random.random() < loot_chance:
