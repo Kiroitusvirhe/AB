@@ -1114,24 +1114,13 @@ class EventRooms:
                     if slot < len(eqs):
                         eq = eqs[slot]
                         # Choose upgrade type
-                        self.game.announcements.wait_for_space(f"Upgrade {eq.display_name()}:\n1. Level up (+1)\n2. Tier up\nPress 1 or 2.", show_player=True, room_number=self.game.current_room)
+                        self.game.announcements.wait_for_space(f"Upgrade {eq.display_name()}:\nPress 1 to level up (+1), or SPACE to skip.", show_player=True, room_number=self.game.current_room)
                         while True:
                             if msvcrt.kbhit():
                                 subkey = msvcrt.getch()
                                 if subkey == b'1':
                                     eq.level += 1
                                     self.game.announcements.wait_for_space(f"{eq.display_name()} leveled up!", show_player=True, room_number=self.game.current_room)
-                                    return
-                                elif subkey == b'2':
-                                    current_tier = eq.tier
-                                    idx = EQUIPMENT_TIERS.index(current_tier)
-                                    if idx < len(EQUIPMENT_TIERS) - 1:
-                                        eq.tier = EQUIPMENT_TIERS[idx + 1]
-                                        # Re-roll bonus stats for new tier
-                                        eq.__init__(eq.name, eq.level, eq.tier)
-                                        self.game.announcements.wait_for_space(f"{eq.display_name()} tier upgraded!", show_player=True, room_number=self.game.current_room)
-                                    else:
-                                        self.game.announcements.wait_for_space(f"{eq.display_name()} is already Legendary!", show_player=True, room_number=self.game.current_room)
                                     return
                                 elif subkey == b' ':
                                     return
@@ -2011,7 +2000,7 @@ class Battle:
                 damage = int(max(1, attacker.attack - defender.defence) * attacker.crit_damage)
                 crit = True
                 if heavy_hitter_active:
-                    damage damage = int(damage * 1.2)
+                    damage = int(damage * 1.2)
             else:
                 damage = max(1, attacker.attack - defender.defence)
                 if heavy_hitter_active:
@@ -2515,7 +2504,7 @@ class Game:
                         )
                 else:
                     if self.current_room > 5:
-                        event_base_chance = 0.05
+                        event_base_chance = 0.08
                         luck_bonus = (self.player.luck // 2) * 0.01  # +1% per 2 luck
                         event_chance = event_base_chance + luck_bonus
                         if random.random() < event_chance:
