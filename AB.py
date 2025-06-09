@@ -1058,6 +1058,43 @@ class EventRooms:
     def __init__(self, game):
         self.game = game  # Access to player, renderer, announcements, etc.
 
+    def gambling_event(self):
+        player = self.game.player
+        lines = ["You find a shady gambler! Bet 10 gold for a chance to double it?"]
+        lines.append("Press Y to bet, SPACE to skip.")
+        self.game.renderer.render(player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'y', b'Y']:
+                    if player.gold < 10:
+                        self.game.announcements.wait_for_space("Not enough gold!", show_player=True, room_number=self.game.current_room)
+                        return
+                    player.gold -= 10
+                    # Luck: 40% base + 3% per luck, max 80%
+                    win_chance = min(0.4 + 0.03 * player.luck, 0.8)
+                    if random.random() < win_chance:
+                        player.gold += 20
+                        self.game.announcements.wait_for_space("You win! You gain 20 gold!", show_player=True, room_number=self.game.current_room)
+                    else:
+                        self.game.announcements.wait_for_space("You lose! Better luck next time.", show_player=True, room_number=self.game.current_room)
+                    return
+                elif key == b' ':
+                    return
+            time.sleep(0.08)
+
+    def skill_learn_event(self):
+        player = self.game.player
+        # Only offer skills not already owned
+        owned_types = {type(skill) for skill in player.skills}
+        available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
+        if not available_skills:
+            self.game.announcements.wait_for_space("You find a shrine of knowledge, but you already know every skill!", show_player=True, room_number=self.game.current_room)
+            return
+        choices = random.sample(available_skills, min(3, len(available_skills)))
+        self.game.announcements.wait_for_space("You find a shrine of knowledge! Choose a skill to learn.", show_player=True, room_number=self.game.current_room)
+        self.game.announcements.skill_learn_screen(player, choices)
+
     def upgrade_equipment_event(self):
         player = self.game.player
         eqs = [eq for eq in player.equipment_items if eq]
@@ -1201,6 +1238,8 @@ class EventRooms:
             "trapped_chest": self.trapped_chest,
             "cursed_altar": self.cursed_altar,
             "upgrade_equipment_event": self.upgrade_equipment_event,
+            "gambling_event": self.gambling_event,
+            "skill_learn_event": self.skill_learn_event,
         }
         # Only include events not yet encountered
         available = [name for name in event_methods if name not in self.game.encountered_events]
@@ -2223,7 +2262,8 @@ class Battle:
                             self.animations.death(enemy, battle_log_lines=battle_log[-6:])
                             enemy.dead = True
                 self.renderer.enemy = None
-                leveled_up = player.gain_xp(8 + 2 * self.current_room)
+                xp_reward = (8 + 2 * self.current_room) * max(1, len(enemies))
+                leveled_up = player.gain_xp(xp_reward)
                 if leveled_up and hasattr(self, 'announcements') and self.announcements:
                     self.announcements.level_up_screen(player, battle_log_lines=battle_log[-6:])
                     # --- Skill roll on level up (after stat upgrade, before loot) ---
