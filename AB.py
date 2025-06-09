@@ -2002,8 +2002,9 @@ class Battle:
         defender.hp -= damage
         thorn_msg = ""
         if defender.thorn_damage > 0:
-            attacker.hp -= defender.thorn_damage
-            thorn_msg = f" {attacker.char} takes {defender.thorn_damage:.0f} thorn damage!"
+            thorn_hit = max(1, defender.thorn_damage - attacker.defence)
+            attacker.hp -= thorn_hit
+            thorn_msg = f" {attacker.char} takes {thorn_hit:.0f} thorn damage!"
         msg = f"{attacker.char} hits {defender.char} for {damage:.0f} damage"
         if 'crit' in locals() and crit:
             msg += " (CRIT!)"
