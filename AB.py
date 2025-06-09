@@ -1483,6 +1483,26 @@ class Announcements:
                     return
             time.sleep(0.08)
 
+    def potion_pickup_prompt(self, player, new_potion):
+        lines = ["Potion slots full!"]
+        for idx, potion in enumerate(player.potions):
+            name = potion.name if potion else "(empty)"
+            lines.append(f"{idx+1}. {name}")
+        lines.append(f"New: {new_potion.name}")
+        lines.append("Press 1-4 to replace, or SPACE to discard new potion.")
+        message = "\n".join(lines)
+        self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
+        while True:
+            if msvcrt.kbhit():
+                key = msvcrt.getch()
+                if key in [b'1', b'2', b'3', b'4']:
+                    slot = int(key) - 1
+                    player.potions[slot] = new_potion
+                    return
+                elif key == b' ':
+                    return
+            time.sleep(0.08)
+
     def skill_learn_screen(self, player, skill_classes, battle_log_lines=None):
         selected = 0
         while True:
@@ -2236,8 +2256,8 @@ class Game:
                             self.boss_probability = 0.0  # Only reset here!
                 else:
                     self.boss_probability = 0.0
-                if self.current_room >= 10 and not boss_room and not final_boss_ready:
-                    self.boss_probability += 0.005
+                if self.current_room >= 11 and not boss_room and not final_boss_ready:
+                    self.boss_probability += 0.01
                 self.reset_player_position()
 
                 # --- Spawn boss or normal enemies ---
@@ -2308,11 +2328,13 @@ class Game:
                         self.announcements.loot_screen(found_items, battle_log_lines=battle_log[-6:])
                         for item in found_items:
                             if isinstance(item, Potion):
-                                # Try to add to inventory
                                 for i in range(4):
                                     if self.player.potions[i] is None:
                                         self.player.potions[i] = item
                                         break
+                                else:
+                                    # All slots full, prompt
+                                    self.announcements.potion_pickup_prompt(self.player, item)
                             elif isinstance(item, Equipment):
                                 for i in range(4):
                                     if self.player.equipment_items[i] is None:
@@ -2322,7 +2344,6 @@ class Game:
                                 else:
                                     # All slots full, prompt
                                     self.announcements.equipment_pickup_prompt(self.player, item)
-                    self.current_room += 1  # Increment room counter
                     self.announcements.current_room = self.current_room
                     self.animations.current_room = self.current_room
                     self.battle_system.current_room = self.current_room
