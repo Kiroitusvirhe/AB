@@ -404,6 +404,32 @@ class HealingDodgeSkill(Skill):
         player.permanent_skills_used.add("HealingDodgeSkill")
         return "HEALING DODGE! 50% chance to heal 2 HP on dodge."
 
+class HemorrhageSkill(Skill):
+    char = 'H'
+    def __init__(self):
+        super().__init__("Hemorrhage", "Trigger all stored bleed at once on an enemy.", cooldown=7.0)
+
+    def use(self, player, enemy):
+        if player.bleed > 0 and player.bleed_counter > 0:
+            bleed_damage = max(1, player.bleed_counter // 15)
+            enemy.hp -= bleed_damage
+            player.bleed_counter = 0
+            self.cooldown_timer = 0.0
+            return f"HEMORRHAGE! {enemy.char} takes {bleed_damage} bleed damage!"
+        else:
+            self.cooldown_timer = 0.0
+            return "HEMORRHAGE! No bleed to trigger."
+
+class BloodlustSkill(Skill):
+    char = 'B'
+    def __init__(self):
+        super().__init__("Bloodlust", "For 5s, heal 1 HP each time you inflict bleed.", cooldown=10.0)
+
+    def use(self, player):
+        player.timed_effects["bloodlust"] = {"timer": 5.0}
+        self.cooldown_timer = 0.0
+        return "BLOODLUST! Heal 1 HP per bleed for 5s!"
+
 SKILL_POOL = [
     ThornBurstSkill,
     LuckyStrikeSkill,
@@ -432,7 +458,8 @@ SKILL_POOL = [
     HeavyHitterSkill,
     TreasureHunterSkill,
     HealingDodgeSkill,
-
+    HemorrhageSkill,
+    BloodlustSkill,
 ]  
     
 # --- Entity Classes ---
@@ -2123,6 +2150,12 @@ class Battle:
                 attacker.bleed_counter -= 15
                 defender.hp -= 1
                 messages.append(f"{defender.char} bleeds for 1 damage!")
+                # Bloodlust synergy
+                if "bloodlust" in getattr(attacker, "timed_effects", {}):
+                    healed = min(1, attacker.max_hp - attacker.hp)
+                    attacker.hp += healed
+                    if healed > 0:
+                        messages.append(f"{attacker.char} heals 1 HP from BLOODLUST!")
         thorn_msg = ""
         if defender.thorn_damage > 0:
             thorn_hit = max(1, defender.thorn_damage - attacker.defence)
@@ -2278,6 +2311,11 @@ class Battle:
                         if living_enemies:
                             skill_log = skill.use(player, random.choice(living_enemies))
                     elif isinstance(skill, UnstablePowerSkill):
+                        skill_log = skill.use(player)
+                    elif isinstance(skill, HemorrhageSkill):
+                        if living_enemies:
+                            skill_log = skill.use(player, random.choice(living_enemies))
+                    elif isinstance(skill, BloodlustSkill):
                         skill_log = skill.use(player)
                     # Add more skills here as needed
 
