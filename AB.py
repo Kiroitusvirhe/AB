@@ -394,6 +394,15 @@ class TreasureHunterSkill(Skill):
         player.permanent_skills_used.add("TreasureHunterSkill")
         return "TREASURE HUNTER! +15% loot chance!"
 
+class HealingDodgeSkill(Skill):
+    char = 'H'
+    def __init__(self):
+        super().__init__("Healing Dodge", "When you dodge, 50% chance to heal 2 HP.", cooldown=0.0)
+    def use(self, player):
+        if "HealingDodgeSkill" in player.permanent_skills_used:
+            return None
+        player.permanent_skills_used.add("HealingDodgeSkill")
+        return "HEALING DODGE! 50% chance to heal 2 HP on dodge."
 
 SKILL_POOL = [
     ThornBurstSkill,
@@ -422,6 +431,7 @@ SKILL_POOL = [
     SteadyHandsSkill,  
     HeavyHitterSkill,
     TreasureHunterSkill,
+    HealingDodgeSkill,
 
 ]  
     
@@ -719,13 +729,13 @@ class BossEnemy(Enemy):
         self.char = 'B'  # Default boss character
 
 class RegenBoss(BossEnemy):
-    """Boss with high health regeneration."""
+    """Boss with high health regeneration and Mega Regen skill."""
     def __init__(self, x, room_number=1):
         super().__init__(x, name="Regen Boss", room_number=room_number)
         self.char = 'R'
-        self.hp = int(30 + 3 * room_number)  # Lowered HP scaling
+        self.hp = int(30 + 3 * room_number)
         self.max_hp = self.hp
-        self.attack = 2 + room_number // 12   # Lowered attack
+        self.attack = 2 + room_number // 12
         self.attack_speed = 0.8
         self.crit_chance = 0.12
         self.crit_damage = 2.0
@@ -734,15 +744,26 @@ class RegenBoss(BossEnemy):
         self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
+        self.mega_regen_cooldown = 8.0
+        self.mega_regen_timer = 0.0
+
+    def update(self, dt, enemies, room_number):
+        self.mega_regen_timer += dt
+        if self.mega_regen_timer >= self.mega_regen_cooldown:
+            self.mega_regen_timer = 0.0
+            heal = int(self.max_hp * 0.25)
+            self.hp = min(self.max_hp, self.hp + heal)
+            return f"{self.name} uses MEGA REGEN and heals {heal} HP!"
+        return None
 
 class LifestealBoss(BossEnemy):
-    """Boss with high lifesteal."""
+    """Boss with high lifesteal and Vampiric Strike skill."""
     def __init__(self, x, room_number=1):
         super().__init__(x, name="Lifesteal Boss", room_number=room_number)
         self.char = 'L'
-        self.hp = int(35 + 3 * room_number)  # Lowered HP scaling
+        self.hp = int(35 + 3 * room_number)
         self.max_hp = self.hp
-        self.attack = 2 + room_number // 10   # Lowered attack
+        self.attack = 2 + room_number // 10
         self.attack_speed = 0.9
         self.crit_chance = 0.10
         self.crit_damage = 2.0
@@ -751,6 +772,28 @@ class LifestealBoss(BossEnemy):
         self.thorn_damage = 0
         self.lifesteal = 0.18
         self.dodge_chance = 0.08
+        self.vamp_strike_cooldown = 6.0
+        self.vamp_strike_timer = 0.0
+
+    def update(self, dt, enemies, room_number):
+        self.vamp_strike_timer += dt
+        if self.vamp_strike_timer >= self.vamp_strike_cooldown:
+            self.vamp_strike_timer = 0.0
+            # Find the player (assume first non-enemy in enemies list is player)
+            from inspect import isclass
+            player = None
+            for e in enemies:
+                if hasattr(e, "char") and getattr(e, "char", None) == '@':
+                    player = e
+                    break
+            # If not found, assume player is not in enemies, so skip
+            if player is None:
+                return None
+            damage = int(self.attack * 1.5)
+            player.hp = max(0, player.hp - damage)
+            self.hp = min(self.max_hp, self.hp + damage)
+            return f"{self.name} uses VAMPIRIC STRIKE! Steals {damage} HP from you!"
+        return None
 
 class FinalBoss(BossEnemy):
     """Balanced final boss that can summon minions."""
@@ -1114,13 +1157,24 @@ class EventRooms:
                     if slot < len(eqs):
                         eq = eqs[slot]
                         # Choose upgrade type
-                        self.game.announcements.wait_for_space(f"Upgrade {eq.display_name()}:\nPress 1 to level up (+1), or SPACE to skip.", show_player=True, room_number=self.game.current_room)
                         while True:
+                            # Render the upgrade prompt directly
+                            lines = [f"Upgrade {eq.display_name()}:"]
+                            lines.append("Press 1 to level up (+1), or SPACE to skip.")
+                            self.game.renderer.render(
+                                player, self.game.room, self.game.ui,
+                                intro_message="\n".join(lines),
+                                room_number=self.game.current_room
+                            )
                             if msvcrt.kbhit():
                                 subkey = msvcrt.getch()
                                 if subkey == b'1':
                                     eq.level += 1
-                                    self.game.announcements.wait_for_space(f"{eq.display_name()} leveled up!", show_player=True, room_number=self.game.current_room)
+                                    self.game.announcements.wait_for_space(
+                                        f"{eq.display_name()} leveled up!",
+                                        show_player=True,
+                                        room_number=self.game.current_room
+                                    )
                                     return
                                 elif subkey == b' ':
                                     return
@@ -1971,12 +2025,14 @@ class Battle:
             if random.random() < defender.dodge_chance:
                 self.animations.dodge_effect(defender, boss_info_lines, battle_log_lines, enemies=enemies,)
                 msg = f"{attacker.char} attacks {defender.char}, but {defender.char} dodges!"
-                # Counter Dodge logic
-                if hasattr(defender, "skills") and any(isinstance(skill, CounterDodgeSkill) for skill in defender.skills):
-                    if random.random() < 0.5:  # 50% chance to counter
-                        counter_damage = max(1, defender.attack - attacker.defence)
-                        attacker.hp -= counter_damage
-                        msg += f" {defender.char} COUNTERS for {counter_damage:.0f} dmg!"
+                # Healing Dodge logic
+                if isinstance(defender, Player) and "HealingDodgeSkill" in getattr(defender, "permanent_skills_used", set()):
+                    if random.random() < 0.5:
+                        healed = min(2, defender.max_hp - defender.hp)
+                        defender.hp += healed
+                        if healed > 0:
+                            msg += f" {defender.char} heals {healed} HP!"
+                # Counter Dodge logic...
                 return [msg]
             # Crit check
             crit = False
@@ -2122,10 +2178,10 @@ class Battle:
 
             # --- Final Boss Summon Skill ---
             for enemy in enemies:
-                if isinstance(enemy, FinalBoss):
-                    summon_msg = enemy.update(time_step, enemies, self.current_room)
-                    if summon_msg:
-                        battle_log.append(summon_msg)
+                if isinstance(enemy, (FinalBoss, RegenBoss, LifestealBoss)):
+                    skill_msg = enemy.update(time_step, [player] + enemies, self.current_room)
+                    if skill_msg:
+                        battle_log.append(skill_msg)
 
             skill_log = None
             skill_name = None
