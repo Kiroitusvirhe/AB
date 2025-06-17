@@ -1147,6 +1147,9 @@ class EventRooms:
         lines.append("Press Y to bet, SPACE to skip.")
         self.game.renderer.render(player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
         while True:
+            if hasattr(self.game, "autoplay") and self.game.autoplay:
+                # Always skip (space)
+                return
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'y', b'Y']:
@@ -1168,6 +1171,9 @@ class EventRooms:
 
     def skill_learn_event(self):
         player = self.game.player
+        if hasattr(self.game, "autoplay") and self.game.autoplay:
+            self.game.announcements.skill_learn_screen(player, choices)
+            return
         # Only offer skills not already owned
         owned_types = {type(skill) for skill in player.skills}
         available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
@@ -1190,6 +1196,12 @@ class EventRooms:
         lines.append("Press 1-4 to select, or SPACE to skip.")
         self.game.renderer.render(player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
         while True:
+            if hasattr(self.game, "autoplay") and self.game.autoplay:
+                # Upgrade first equipment, level up
+                if eqs:
+                    eq = eqs[0]
+                    eq.level += 1
+                return
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'1', b'2', b'3', b'4']:
@@ -1236,6 +1248,9 @@ class EventRooms:
         lines.append("Press Y to buy, SPACE to ignore.")
         self.game.renderer.render(self.game.player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
         while True:
+            if hasattr(self.game, "autoplay") and self.game.autoplay:
+                # Always skip (space)
+                break
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'y', b'Y']:
@@ -1278,6 +1293,9 @@ class EventRooms:
         lines = ["You find a suspicious chest...", "Open it? (Y/N)"]
         self.game.renderer.render(self.game.player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
         while True:
+            if hasattr(self.game, "autoplay") and self.game.autoplay:
+                # Always skip (space)
+                break
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'y', b'Y']:
@@ -1298,6 +1316,9 @@ class EventRooms:
         lines = ["A cursed altar beckons. Touch it? (Y/N)"]
         self.game.renderer.render(self.game.player, self.game.room, self.game.ui, intro_message="\n".join(lines), room_number=self.game.current_room)
         while True:
+            if hasattr(self.game, "autoplay") and self.game.autoplay:
+                # Always skip (space)
+                break
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'y', b'Y']:
@@ -1584,6 +1605,10 @@ class Announcements:
         visible_x = 5  # Default visible position
         original_player_x = self.player.x if self.player.x >= 0 else visible_x
         while not self.input_handler.space_pressed:
+            # --- AUTOPLAY support ---
+            if hasattr(self, "game") and getattr(self.game, "autoplay", False):
+                self.input_handler.space_pressed = True
+                break
             if not show_player:
                 self.player.x = -1
             else:
@@ -1645,6 +1670,10 @@ class Announcements:
         selected = 0
 
         while True:
+            # --- AUTOPLAY support ---
+            if hasattr(self, "game") and getattr(self.game, "autoplay", False):
+                selected = 0
+                break
             lines = ["LVL UP!", "", "Choose a stat to upgrade:"]
             for i, (stat, desc) in enumerate(choices):
                 prefix = "-> " if i == selected else "   "
@@ -1674,6 +1703,10 @@ class Announcements:
         ]
         selected = 0
         while True:
+            # --- AUTOPLAY support ---
+            if hasattr(self, "game") and getattr(self.game, "autoplay", False):
+                selected = 0
+                break
             lines = ["CHOOSE YOUR CLASS:"]
             for i, name in enumerate(jobs):
                 prefix = "-> " if i == selected else "   "
@@ -1695,6 +1728,26 @@ class Announcements:
         return selected
 
     def pre_battle_item_use(self, player, enemy, enemies=None):
+        # --- AUTOPLAY support ---
+        if hasattr(self, "game") and getattr(self.game, "autoplay", False):
+            # If boss room, use ALL potions
+            if isinstance(enemy, BossEnemy):
+                for idx, potion in enumerate(player.potions):
+                    if potion:
+                        log = potion.use(player)
+                        player.potions[idx] = None
+                        self.wait_for_space(log, enemy=enemy, show_player=True, room_number=self.current_room, enemies=enemies)
+                return  # Skip manual prompt
+            # Otherwise, heal if HP < 10
+            if player.hp < 10:
+                for idx, potion in enumerate(player.potions):
+                    if isinstance(potion, HealingPotion):
+                        log = potion.use(player)
+                        player.potions[idx] = None
+                        self.wait_for_space(log, enemy=enemy, show_player=True, room_number=self.current_room, enemies=enemies)
+                        break
+            return  # Skip manual prompt in autoplay
+
         while any(player.potions):
             # Show inventory and ask if the player wants to use a potion
             lines = ["Use a potion before battle?"]
@@ -1749,6 +1802,15 @@ class Announcements:
         message = "\n".join(lines)
         self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
         while True:
+            # --- AUTOPLAY support ---
+            if hasattr(self, "game") and getattr(self.game, "autoplay", False):
+                # Replace a random slot
+                slot = random.randint(0, 3)
+                if player.equipment_items[slot]:
+                    player.unequip(player.equipment_items[slot])
+                player.equipment_items[slot] = new_item
+                player.equip(new_item)
+                return
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'1', b'2', b'3', b'4']:
@@ -1773,6 +1835,11 @@ class Announcements:
         message = "\n".join(lines)
         self.renderer.render(player, self.room, self.ui, intro_message=message, room_number=self.current_room)
         while True:
+            # --- AUTOPLAY support ---
+            if hasattr(self, "game") and getattr(self.game, "autoplay", False):
+                slot = random.randint(0, 3)
+                player.potions[slot] = new_potion
+                return
             if msvcrt.kbhit():
                 key = msvcrt.getch()
                 if key in [b'1', b'2', b'3', b'4']:
@@ -1786,6 +1853,10 @@ class Announcements:
     def skill_learn_screen(self, player, skill_classes, battle_log_lines=None):
         selected = 0
         while True:
+            # --- AUTOPLAY support ---
+            if hasattr(self, "game") and getattr(self.game, "autoplay", False):
+                selected = 0
+                break
             lines = ["LEVEL UP! Choose a new skill:"]
             for i, skill_cls in enumerate(skill_classes):
                 prefix = "-> " if i == selected else "   "
@@ -2449,6 +2520,7 @@ class Game:
         self.animations = Animations(self.renderer, self.room, self.ui, self.player)
         self.battle_system = Battle(self.renderer, self.ui, self.room)
         self.battle_system.animations = self.animations
+        self.announcements.game = self
         self.battle_system.announcements = self.announcements  # <-- Add this line
         self.enemy = None
         self.running = True
@@ -2463,6 +2535,7 @@ class Game:
         self.encountered_events = set()
         self.endless_loops = 0
         self.difficulty_multiplier = 1.0
+        self.autoplay = False
         
         # Link room number to other classes
         self.announcements.current_room = self.current_room
@@ -2559,6 +2632,20 @@ class Game:
             else:
                 self.player = Paladin(x=PLAYER_START_X)
             self.reset_player_position()
+
+            # --- Autoplay prompt ---
+            self.autoplay = False
+            lines = ["Enable AUTOPLAY mode?", "Press Y for autoplay, SPACE for manual."]
+            self.renderer.render(self.player, self.room, self.ui, intro_message="\n".join(lines), room_number=self.current_room)
+            while True:
+                if msvcrt.kbhit():
+                    key = msvcrt.getch()
+                    if key in [b'y', b'Y']:
+                        self.autoplay = True
+                        break
+                    elif key == b' ':
+                        break
+                time.sleep(0.08)
 
             self.current_room = 1  # Reset room counter on new game
             self.final_boss_ready = False
@@ -2752,6 +2839,7 @@ class Game:
                     self.animations.player_slide_and_disappear()
                 else:
                     self.announcements.lose(self.enemy)
+                    self.__init__()
                     break
 
                 if self.input_handler.quit:
@@ -2788,6 +2876,9 @@ class Game:
         ]
 
         while True:
+            if hasattr(self, "autoplay") and self.autoplay:
+                # Always leave shop (space)
+                return
             lines = ["SHOP", ""]
             for i, (item, price) in enumerate(shop_items):
                 name = item.name if not hasattr(item, "display_name") else item.display_name()
