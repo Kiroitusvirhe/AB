@@ -473,6 +473,8 @@ class Player(Entity):
         self.timed_effects = {}  # e.g. {"crit_shield": {"value": 10, "timer": 3.0}}
         self.permanent_skills_used = set()
         self.boss_xp_bonus = 1.0
+        self.bleed = 0
+        self.bleed_counter = 0
 
     def gain_xp(self, amount):
         leveled_up = False
@@ -510,6 +512,8 @@ class Player(Entity):
             self.hp += 6
         elif stat == "luck":
             self.luck = min(10, self.luck + 1)
+        elif stat == "bleed":
+            self.bleed += 1
 
     def reset_regen_timer(self):
         self.regen_timer = 0.0
@@ -535,6 +539,7 @@ class Player(Entity):
             Thorns: "thorn_damage",
             Ring: "health_regen",
             Gloves: "attack_speed",
+            Dagger: "bleed",
         }
         for cls, stat in stat_map.items():
             if isinstance(item, cls):
@@ -581,6 +586,8 @@ class Player(Entity):
             self.hp = min(self.hp, self.max_hp)
         elif stat == "luck":
             self.luck = max(0, self.luck - 1)  # <--- Add this line
+        elif stat == "bleed":
+            self.bleed = max(0, self.bleed - 1)
 
     def unequip(self, item):
         stat_map = {
@@ -594,6 +601,7 @@ class Player(Entity):
             Thorns: "thorn_damage",
             Ring: "health_regen",
             Gloves: "attack_speed",
+            Dagger: "bleed",
         }
         for cls, stat in stat_map.items():
             if isinstance(item, cls):
@@ -1082,8 +1090,13 @@ class Gloves(Equipment):
     def __init__(self, level=1, tier="Basic"):
         super().__init__("gloves", level, tier)  # Attack speed
 
+class Dagger(Equipment):
+    char = 'd'
+    def __init__(self, level=1, tier="Basic"):
+        super().__init__("dagger", level, tier)  # Bleed
+
 Equipment.equipment_classes = [
-    Sword, Shield, Armor, Fangs, Boots, Amulet, Gem, Thorns, Ring, Gloves
+    Sword, Shield, Armor, Fangs, Boots, Amulet, Gem, Thorns, Ring, Gloves, Dagger
 ]
 # Add more as needed for other stats
 
@@ -1313,6 +1326,7 @@ class UI:
             f"REGEN: {player.health_regen:.0f}",
             f"THORN: {player.thorn_damage:.0f}",
             f"LIFESTEAL: {player.lifesteal:.2f}",
+            f"BLEED: {getattr(player, 'bleed', 0)}",
             f"DODGE%: {int(round(player.dodge_chance * 100))}",
             f"LUCK: {player.luck}",
             f"GOLD: {player.gold}",
@@ -1595,6 +1609,7 @@ class Announcements:
             ("lifesteal", "Lifesteal +5%"),
             ("dodge_chance", "Dodge +5%"),
             ("max_hp", "Max HP +5"),
+            ("bleed", "Bleed +1"),
         ]
         # Add luck if not maxed
         if getattr(player, "luck", 0) < 10:
@@ -2101,6 +2116,13 @@ class Battle:
             return messages
 
         defender.hp -= damage
+        #bleed logic
+        if isinstance(attacker, Player) and attacker.bleed > 0 and defender.hp > 0:
+            attacker.bleed_counter += attacker.bleed
+            while attacker.bleed_counter >= 15:
+                attacker.bleed_counter -= 15
+                defender.hp -= 1
+                messages.append(f"{defender.char} bleeds for 1 damage!")
         thorn_msg = ""
         if defender.thorn_damage > 0:
             thorn_hit = max(1, defender.thorn_damage - attacker.defence)
@@ -2176,11 +2198,34 @@ class Battle:
                     player.dodge_chance = max(0.0, player.dodge_chance - 0.10)
                     quick_step_active = False
 
-            # --- Final Boss Summon Skill ---
+            # --- Final Boss Summon Skill & Boss Skill Animations ---
             for enemy in enemies:
                 if isinstance(enemy, (FinalBoss, RegenBoss, LifestealBoss)):
                     skill_msg = enemy.update(time_step, [player] + enemies, self.current_room)
                     if skill_msg:
+                        # --- Boss skill animation ---
+                        if hasattr(self, 'animations') and self.animations:
+                            if isinstance(enemy, RegenBoss):
+                                self.animations.skill_effect(
+                                    "MEGA REGEN!", enemy,
+                                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                                    battle_log_lines=battle_log[-6:],
+                                    enemies=enemies,
+                                )
+                            elif isinstance(enemy, LifestealBoss):
+                                self.animations.skill_effect(
+                                    "VAMPIRIC STRIKE!", enemy,
+                                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                                    battle_log_lines=battle_log[-6:],
+                                    enemies=enemies,
+                                )
+                            elif isinstance(enemy, FinalBoss):
+                                self.animations.skill_effect(
+                                    "SUMMON!", enemy,
+                                    boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
+                                    battle_log_lines=battle_log[-6:],
+                                    enemies=enemies,
+                                )
                         battle_log.append(skill_msg)
 
             skill_log = None
