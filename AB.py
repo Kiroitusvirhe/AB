@@ -764,7 +764,7 @@ class BossEnemy(Enemy):
         self.char = 'B'  # Default boss character
 
 class RegenBoss(BossEnemy):
-    """Boss with high health regeneration and Mega Regen skill."""
+    """Boss with high health regeneration and Unholy Light skill."""
     def __init__(self, x, room_number=1):
         super().__init__(x, name="Regen Boss", room_number=room_number)
         self.char = 'R'
@@ -779,16 +779,17 @@ class RegenBoss(BossEnemy):
         self.thorn_damage = 0
         self.lifesteal = 0.0
         self.dodge_chance = 0.07
-        self.mega_regen_cooldown = 8.0
-        self.mega_regen_timer = 0.0
+        self.unholy_light_cooldown = 8.0
+        self.unholy_light_timer = 0.0
 
     def update(self, dt, enemies, room_number):
-        self.mega_regen_timer += dt
-        if self.mega_regen_timer >= self.mega_regen_cooldown:
-            self.mega_regen_timer = 0.0
-            heal = int(self.max_hp * 0.25)
+        self.unholy_light_timer += dt
+        if self.unholy_light_timer >= self.unholy_light_cooldown:
+            self.unholy_light_timer = 0.0
+            # Nerf: Heal only 10% of max HP (was 25%)
+            heal = int(self.max_hp * 0.10)
             self.hp = min(self.max_hp, self.hp + heal)
-            return f"{self.name} uses MEGA REGEN and heals {heal} HP!"
+            return f"{self.name} uses UNHOLY LIGHT and heals {heal} HP!"
         return None
 
 class LifestealBoss(BossEnemy):
@@ -1171,9 +1172,6 @@ class EventRooms:
 
     def skill_learn_event(self):
         player = self.game.player
-        if hasattr(self.game, "autoplay") and self.game.autoplay:
-            self.game.announcements.skill_learn_screen(player, choices)
-            return
         # Only offer skills not already owned
         owned_types = {type(skill) for skill in player.skills}
         available_skills = [cls for cls in SKILL_POOL if cls not in owned_types]
@@ -1181,6 +1179,9 @@ class EventRooms:
             self.game.announcements.wait_for_space("You find a shrine of knowledge, but you already know every skill!", show_player=True, room_number=self.game.current_room)
             return
         choices = random.sample(available_skills, min(3, len(available_skills)))
+        if hasattr(self.game, "autoplay") and self.game.autoplay:
+            self.game.announcements.skill_learn_screen(player, choices)
+            return
         self.game.announcements.wait_for_space("You find a shrine of knowledge! Choose a skill to learn.", show_player=True, room_number=self.game.current_room)
         self.game.announcements.skill_learn_screen(player, choices)
 
@@ -1591,6 +1592,34 @@ class InputHandler:
 # --- Announcements Class ---
 class Announcements:
     """Handles displaying announcements and intro messages."""
+    
+    AUTOPLAY_STAT_PRIORITY = {
+        "Fighter": ["attack", "max_hp", "defence", "attack_speed", "crit_chance", "crit_damage", "health_regen", "thorn_damage", "lifesteal", "dodge_chance", "bleed", "luck"],
+        "Assassin": ["crit_chance", "attack_speed", "attack", "crit_damage", "dodge_chance", "bleed", "lifesteal", "max_hp", "defence", "health_regen", "thorn_damage", "luck"],
+        "Paladin": ["max_hp", "defence", "health_regen", "attack", "lifesteal", "dodge_chance", "attack_speed", "thorn_damage", "crit_chance", "crit_damage", "bleed", "luck"],
+    }
+
+    AUTOPLAY_SKILL_PRIORITY = {
+        "Fighter": [
+            "Big Slash", "Thorn Burst", "Regen Wave", "Crit Shield", "Heavy Hitter", "Iron Will", "Lead Feet", "Glass Cannon",
+            "Adrenaline Rush", "Invincible", "Bloodlust", "Hemorrhage", "Lucky Strike", "Treasure Hunter", "Gold Rush"
+        ],
+        "Assassin": [
+            "Double Attack", "Guaranteed Crit", "Clumsy Swing", "Quick Step", "Coward's Grace", "Bloodlust", "Hemorrhage",
+            "Sharpened Mind", "Gamble", "Jackpot", "Lucky Strike", "Blinding Flash", "Counter Dodge"
+        ],
+        "Paladin": [
+            "Blessing Light", "Regen Wave", "Crit Shield", "Iron Will", "Lead Feet", "Heavy Hitter", "Invincible",
+            "Bloodlust", "Hemorrhage", "Thorn Burst", "Treasure Hunter", "Gold Rush"
+        ],
+    }
+
+    AUTOPLAY_EQUIP_PRIORITY = {
+        "Fighter":    ["Sword", "Shield", "Armor", "Gloves", "Thorns", "Ring", "Amulet", "Gem", "Fangs", "Boots", "Dagger"],
+        "Assassin":   ["Dagger", "Boots", "Gloves", "Amulet", "Gem", "Fangs", "Ring", "Sword", "Armor", "Shield", "Thorns"],
+        "Paladin":    ["Shield", "Armor", "Ring", "Sword", "Thorns", "Gloves", "Amulet", "Gem", "Fangs", "Boots", "Dagger"],
+    }
+
     def __init__(self, renderer, ui, room, player, input_handler):
         self.renderer = renderer
         self.ui = ui
@@ -1672,7 +1701,21 @@ class Announcements:
         while True:
             # --- AUTOPLAY support ---
             if hasattr(self, "game") and getattr(self.game, "autoplay", False):
-                selected = 0
+                # Detect class
+                player_class = type(player).__name__
+                # Map to priority list
+                if player_class in self.AUTOPLAY_STAT_PRIORITY:
+                    priority = self.AUTOPLAY_STAT_PRIORITY[player_class]
+                else:
+                    priority = self.AUTOPLAY_STAT_PRIORITY["Fighter"]  # Default fallback
+                # Find the highest priority stat in choices
+                stat_choices = [stat for stat, desc in choices]
+                for stat in priority:
+                    if stat in stat_choices:
+                        selected = stat_choices.index(stat)
+                        break
+                else:
+                    selected = 0  # fallback
                 break
             lines = ["LVL UP!", "", "Choose a stat to upgrade:"]
             for i, (stat, desc) in enumerate(choices):
@@ -1804,8 +1847,24 @@ class Announcements:
         while True:
             # --- AUTOPLAY support ---
             if hasattr(self, "game") and getattr(self.game, "autoplay", False):
-                # Replace a random slot
-                slot = random.randint(0, 3)
+                player_class = type(player).__name__
+                priority = self.AUTOPLAY_EQUIP_PRIORITY.get(player_class, [])
+                # Get the equipment type name of the new item (e.g. "Sword")
+                new_type = type(new_item).__name__
+                # Find the highest priority slot to replace
+                slot = 0  # fallback
+                for prio_type in priority:
+                    for idx, eq in enumerate(player.equipment_items):
+                        if eq and type(eq).__name__ == prio_type:
+                            slot = idx
+                            break
+                    else:
+                        continue
+                    break
+                else:
+                    # If none found, just pick the first slot
+                    slot = 0
+                # Replace the chosen slot
                 if player.equipment_items[slot]:
                     player.unequip(player.equipment_items[slot])
                 player.equipment_items[slot] = new_item
@@ -1855,7 +1914,14 @@ class Announcements:
         while True:
             # --- AUTOPLAY support ---
             if hasattr(self, "game") and getattr(self.game, "autoplay", False):
-                selected = 0
+                player_class = type(player).__name__
+                priority = self.AUTOPLAY_SKILL_PRIORITY.get(player_class, [])
+                skill_names = [skill_cls().name for skill_cls in skill_classes]
+                selected = 0  # fallback
+                for prio_name in priority:
+                    if prio_name in skill_names:
+                        selected = skill_names.index(prio_name)
+                        break
                 break
             lines = ["LEVEL UP! Choose a new skill:"]
             for i, skill_cls in enumerate(skill_classes):
@@ -2311,7 +2377,7 @@ class Battle:
                         if hasattr(self, 'animations') and self.animations:
                             if isinstance(enemy, RegenBoss):
                                 self.animations.skill_effect(
-                                    "MEGA REGEN!", enemy,
+                                    "UNHOLY LIGHT!", enemy,
                                     boss_info_lines=self.ui.get_enemy_stats_lines(enemy, self.room.height),
                                     battle_log_lines=battle_log[-6:],
                                     enemies=enemies,
@@ -2331,7 +2397,7 @@ class Battle:
                                     enemies=enemies,
                                 )
                         battle_log.append(skill_msg)
-
+            
             skill_log = None
             skill_name = None
             living_enemies = [e for e in enemies if e.hp > 0]
