@@ -766,7 +766,7 @@ class BossEnemy(Enemy):
 class RegenBoss(BossEnemy):
     """Boss with high health regeneration and Unholy Light skill."""
     def __init__(self, x, room_number=1):
-        super().__init__(x, name="Regen Boss", room_number=room_number)
+        super().__init__(x, name="Unholy Paladin", room_number=room_number)
         self.char = 'R'
         self.hp = int(30 + 3 * room_number)
         self.max_hp = self.hp
@@ -795,7 +795,7 @@ class RegenBoss(BossEnemy):
 class LifestealBoss(BossEnemy):
     """Boss with high lifesteal and Vampiric Strike skill."""
     def __init__(self, x, room_number=1):
-        super().__init__(x, name="Lifesteal Boss", room_number=room_number)
+        super().__init__(x, name="Vampire", room_number=room_number)
         self.char = 'L'
         self.hp = int(35 + 3 * room_number)
         self.max_hp = self.hp
@@ -1357,7 +1357,7 @@ class EventRooms:
 class UI:
     """Handles UI elements and stat formatting."""
     def __init__(self):
-        self.title = "ASCII Roguelike Demo"
+        self.title = "Kill the Necromancer!"
 
     def get_title_line(self, pad_left, width):
         return ' ' * pad_left + self.title.center(width + 2)
@@ -2397,7 +2397,13 @@ class Battle:
                                     enemies=enemies,
                                 )
                         battle_log.append(skill_msg)
-            
+            # Rebuild living_enemies and sync enemy_next_attack if new enemies were added
+            while len(enemy_next_attack) < len(enemies):
+                enemy_next_attack.append(clock)
+            while len(enemy_next_attack) > len(enemies):
+                enemy_next_attack.pop()
+            living_enemies = [e for e in enemies if e.hp > 0]
+
             skill_log = None
             skill_name = None
             living_enemies = [e for e in enemies if e.hp > 0]
@@ -2572,7 +2578,8 @@ class Battle:
                 return "lose", battle_log
             time.sleep(time_step)
             clock += time_step
-
+        return "lose", []
+    
 # --- Main Game Loop ---
 class Game:
     """Main game class. Manages game state and runs the main loop."""
